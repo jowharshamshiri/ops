@@ -1,32 +1,32 @@
 // OPS utility module - Central execution and utility functions
 // Implements Java OPS class functionality with Rust enhancements
 
-use crate::operation::Operation;
-use crate::context::OperationalContext;
-use crate::error::OperationError;
+use crate::op::Op;
+use crate::context::OpContext;
+use crate::error::OpError;
 use crate::wrappers::logging::LoggingWrapper;
 use std::panic::Location;
 
 /// Central execution function with automatic logging wrapper
 /// Equivalent to Java OPS.perform() method
-pub async fn perform<T>(operation: Box<dyn Operation<T>>, context: &mut OperationalContext) -> Result<T, OperationError>
+pub async fn perform<T>(op: Box<dyn Op<T>>, context: &mut OpContext) -> Result<T, OpError>
 where
     T: Send + 'static,
 {
-    // Get caller information for dynamic operation naming
-    let operation_name = get_caller_operation_name();
+    // Get caller information for dynamic op naming
+    let op_name = get_caller_op_name();
     
-    // Wrap operation with logging (matches Java behavior)
-    let logged_operation = LoggingWrapper::new(operation, operation_name);
+    // Wrap op with logging (matches Java behavior)
+    let logged_op = LoggingWrapper::new(op, op_name);
     
     // Execute with logging
-    logged_operation.perform(context).await
+    logged_op.perform(context).await
 }
 
 /// Stack trace analysis to get caller class name
 /// Equivalent to Java getCallerCallerClassName()
 #[track_caller]
-pub fn get_caller_operation_name() -> String {
+pub fn get_caller_op_name() -> String {
     let location = Location::caller();
     format!("{}::{}", 
         location.file().split('/').last().unwrap_or("unknown").replace(".rs", ""),
@@ -34,72 +34,72 @@ pub fn get_caller_operation_name() -> String {
     )
 }
 
-/// Wrap nested operation exception with context
+/// Wrap nested op exception with context
 /// Equivalent to Java wrapNestedOpException(String, Exception)
-pub fn wrap_nested_op_exception(operation_name: &str, error: OperationError) -> OperationError {
+pub fn wrap_nested_op_exception(op_name: &str, error: OpError) -> OpError {
     match error {
-        OperationError::ExecutionFailed(msg) => {
-            OperationError::ExecutionFailed(format!("Operation '{}' failed: {}", operation_name, msg))
+        OpError::ExecutionFailed(msg) => {
+            OpError::ExecutionFailed(format!("Op '{}' failed: {}", op_name, msg))
         },
-        OperationError::Timeout { timeout_ms } => {
-            OperationError::ExecutionFailed(format!("Operation '{}' timed out after {}ms", operation_name, timeout_ms))
+        OpError::Timeout { timeout_ms } => {
+            OpError::ExecutionFailed(format!("Op '{}' timed out after {}ms", op_name, timeout_ms))
         },
-        OperationError::Context(msg) => {
-            OperationError::Context(format!("Operation '{}' context error: {}", operation_name, msg))
+        OpError::Context(msg) => {
+            OpError::Context(format!("Op '{}' context error: {}", op_name, msg))
         },
-        OperationError::BatchFailed(msg) => {
-            OperationError::BatchFailed(format!("Batch operation '{}' failed: {}", operation_name, msg))
+        OpError::BatchFailed(msg) => {
+            OpError::BatchFailed(format!("Batch op '{}' failed: {}", op_name, msg))
         },
-        OperationError::Other(boxed_error) => {
-            OperationError::ExecutionFailed(format!("Operation '{}' failed: {}", operation_name, boxed_error))
+        OpError::Other(boxed_error) => {
+            OpError::ExecutionFailed(format!("Op '{}' failed: {}", op_name, boxed_error))
         },
     }
 }
 
-/// Wrap nested operation exception without operation name
+/// Wrap nested op exception without op name
 /// Equivalent to Java wrapNestedOpException(Exception)
-pub fn wrap_nested_exception(error: Box<dyn std::error::Error + Send + Sync>) -> OperationError {
-    OperationError::Other(error)
+pub fn wrap_nested_exception(error: Box<dyn std::error::Error + Send + Sync>) -> OpError {
+    OpError::Other(error)
 }
 
-/// Convert any error to OperationError with context
+/// Convert any error to OpError with context
 /// Equivalent to Java wrapNestedRuntimeException(Exception)
-pub fn wrap_runtime_exception(error: Box<dyn std::error::Error + Send + Sync>) -> OperationError {
-    OperationError::ExecutionFailed(format!("Runtime error: {}", error))
+pub fn wrap_runtime_exception(error: Box<dyn std::error::Error + Send + Sync>) -> OpError {
+    OpError::ExecutionFailed(format!("Runtime error: {}", error))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::operation::ClosureOperation;
+    use crate::op::ClosureOp;
 
     #[tokio::test]
     async fn test_perform_with_auto_logging() {
-        let mut context = OperationalContext::new();
+        let mut context = OpContext::new();
         
-        let operation = Box::new(ClosureOperation::new(|_ctx| {
+        let op = Box::new(ClosureOp::new(|_ctx| {
             Box::pin(async move { Ok(42) })
         }));
         
-        let result = perform(operation, &mut context).await;
+        let result = perform(op, &mut context).await;
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), 42);
     }
 
     #[test] 
-    fn test_caller_operation_name() {
-        let name = get_caller_operation_name();
+    fn test_caller_op_name() {
+        let name = get_caller_op_name();
         assert!(name.contains("ops"));
         assert!(name.contains("::"));
     }
 
     #[test]
     fn test_wrap_nested_op_exception() {
-        let original_error = OperationError::ExecutionFailed("original error".to_string());
+        let original_error = OpError::ExecutionFailed("original error".to_string());
         let wrapped = wrap_nested_op_exception("TestOp", original_error);
         
         match wrapped {
-            OperationError::ExecutionFailed(msg) => {
+            OpError::ExecutionFailed(msg) => {
                 assert!(msg.contains("TestOp"));
                 assert!(msg.contains("original error"));
             },
@@ -113,7 +113,7 @@ mod tests {
         let wrapped = wrap_runtime_exception(error);
         
         match wrapped {
-            OperationError::ExecutionFailed(msg) => {
+            OpError::ExecutionFailed(msg) => {
                 assert!(msg.contains("Runtime error"));
                 assert!(msg.contains("test error"));
             },

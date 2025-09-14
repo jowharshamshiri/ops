@@ -1,9 +1,9 @@
 // Advanced Resilience Patterns - Error Recovery Strategies
-// Enhanced operations framework with retry, circuit breaker, and fallback patterns
+// Enhanced ops framework with retry, circuit breaker, and fallback patterns
 
-use crate::operation::Operation;
-use crate::context::OperationalContext;
-use crate::error::OperationError;
+use crate::op::Op;
+use crate::context::OpContext;
+use crate::error::OpError;
 use async_trait::async_trait;
 use std::time::{Duration, Instant};
 use std::sync::{Arc, Mutex};
@@ -72,67 +72,67 @@ impl RetryStrategy {
     }
 }
 
-/// Retry operation wrapper with configurable strategy
-pub struct RetryOperation<T> {
-    operation: Box<dyn Operation<T>>,
+/// Retry op wrapper with configurable strategy
+pub struct RetryOp<T> {
+    op: Box<dyn Op<T>>,
     strategy: RetryStrategy,
-    retry_predicate: Option<Box<dyn Fn(&OperationError) -> bool + Send + Sync>>,
-    operation_name: String,
+    retry_predicate: Option<Box<dyn Fn(&OpError) -> bool + Send + Sync>>,
+    op_name: String,
 }
 
-impl<T> RetryOperation<T>
+impl<T> RetryOp<T>
 where
     T: Send + 'static,
 {
-    pub fn new(operation: Box<dyn Operation<T>>, strategy: RetryStrategy) -> Self {
+    pub fn new(op: Box<dyn Op<T>>, strategy: RetryStrategy) -> Self {
         Self {
-            operation,
+            op,
             strategy,
             retry_predicate: None,
-            operation_name: "RetryOperation".to_string(),
+            op_name: "RetryOp".to_string(),
         }
     }
 
     pub fn with_name(mut self, name: String) -> Self {
-        self.operation_name = name;
+        self.op_name = name;
         self
     }
 
     pub fn with_retry_predicate<F>(mut self, predicate: F) -> Self 
     where 
-        F: Fn(&OperationError) -> bool + Send + Sync + 'static,
+        F: Fn(&OpError) -> bool + Send + Sync + 'static,
     {
         self.retry_predicate = Some(Box::new(predicate));
         self
     }
 
-    fn should_retry(&self, error: &OperationError) -> bool {
+    fn should_retry(&self, error: &OpError) -> bool {
         if let Some(predicate) = &self.retry_predicate {
             predicate(error)
         } else {
             // Default: retry on execution failures and timeouts
-            matches!(error, OperationError::ExecutionFailed(_) | OperationError::Timeout { .. })
+            matches!(error, OpError::ExecutionFailed(_) | OpError::Timeout { .. })
         }
     }
 }
 
 #[async_trait]
-impl<T> Operation<T> for RetryOperation<T>
+impl<T> Op<T> for RetryOp<T>
 where
     T: Send + 'static,
 {
-    async fn perform(&self, context: &mut OperationalContext) -> Result<T, OperationError> {
+    async fn perform(&self, context: &mut OpContext) -> Result<T, OpError> {
         let mut attempt = 0;
         let mut last_error = None;
 
         loop {
-            info!("Attempting operation '{}' (attempt {}/{})", 
-                self.operation_name, attempt + 1, self.strategy.max_attempts());
+            info!("Attempting op '{}' (attempt {}/{})", 
+                self.op_name, attempt + 1, self.strategy.max_attempts());
 
-            match self.operation.perform(context).await {
+            match self.op.perform(context).await {
                 Ok(result) => {
                     if attempt > 0 {
-                        info!("Operation '{}' succeeded after {} retries", self.operation_name, attempt);
+                        info!("Op '{}' succeeded after {} retries", self.op_name, attempt);
                     }
                     return Ok(result);
                 },
@@ -140,20 +140,20 @@ where
                     last_error = Some(error.clone());
                     
                     if !self.should_retry(&error) {
-                        warn!("Operation '{}' failed with non-retryable error: {:?}", self.operation_name, error);
+                        warn!("Op '{}' failed with non-retryable error: {:?}", self.op_name, error);
                         return Err(error);
                     }
 
                     if let Some(delay) = self.strategy.get_delay(attempt) {
-                        warn!("Operation '{}' failed on attempt {}, retrying in {:?}: {:?}", 
-                            self.operation_name, attempt + 1, delay, error);
+                        warn!("Op '{}' failed on attempt {}, retrying in {:?}: {:?}", 
+                            self.op_name, attempt + 1, delay, error);
                         tokio::time::sleep(delay).await;
                         attempt += 1;
                     } else {
-                        error!("Operation '{}' failed after {} attempts, giving up: {:?}", 
-                            self.operation_name, attempt + 1, error);
-                        return Err(OperationError::ExecutionFailed(
-                            format!("Operation failed after {} retries. Last error: {:?}", attempt + 1, error)
+                        error!("Op '{}' failed after {} attempts, giving up: {:?}", 
+                            self.op_name, attempt + 1, error);
+                        return Err(OpError::ExecutionFailed(
+                            format!("Op failed after {} retries. Last error: {:?}", attempt + 1, error)
                         ));
                     }
                 }
@@ -165,7 +165,7 @@ where
 /// Circuit Breaker state
 #[derive(Debug, Clone, PartialEq)]
 pub enum CircuitState {
-    Closed,   // Normal operation
+    Closed,   // Normal op
     Open,     // Failing fast
     HalfOpen, // Testing if service recovered
 }
@@ -208,29 +208,29 @@ impl Default for CircuitBreakerState {
     }
 }
 
-/// Circuit Breaker operation wrapper
-pub struct CircuitBreakerOperation<T> {
-    operation: Box<dyn Operation<T>>,
+/// Circuit Breaker op wrapper
+pub struct CircuitBreakerOp<T> {
+    op: Box<dyn Op<T>>,
     config: CircuitBreakerConfig,
     state: Arc<Mutex<CircuitBreakerState>>,
-    operation_name: String,
+    op_name: String,
 }
 
-impl<T> CircuitBreakerOperation<T>
+impl<T> CircuitBreakerOp<T>
 where
     T: Send + 'static,
 {
-    pub fn new(operation: Box<dyn Operation<T>>, config: CircuitBreakerConfig) -> Self {
+    pub fn new(op: Box<dyn Op<T>>, config: CircuitBreakerConfig) -> Self {
         Self {
-            operation,
+            op,
             config,
             state: Arc::new(Mutex::new(CircuitBreakerState::default())),
-            operation_name: "CircuitBreakerOperation".to_string(),
+            op_name: "CircuitBreakerOp".to_string(),
         }
     }
 
     pub fn with_name(mut self, name: String) -> Self {
-        self.operation_name = name;
+        self.op_name = name;
         self
     }
 
@@ -244,7 +244,7 @@ where
                     state.success_count += 1;
                     if state.success_count >= self.config.success_threshold {
                         info!("Circuit breaker for '{}' closing after {} successes", 
-                            self.operation_name, state.success_count);
+                            self.op_name, state.success_count);
                         state.state = CircuitState::Closed;
                         state.failure_count = 0;
                         state.success_count = 0;
@@ -267,13 +267,13 @@ where
                 CircuitState::Closed => {
                     if state.failure_count >= self.config.failure_threshold {
                         warn!("Circuit breaker for '{}' opening after {} failures", 
-                            self.operation_name, state.failure_count);
+                            self.op_name, state.failure_count);
                         state.state = CircuitState::Open;
                     }
                 },
                 CircuitState::HalfOpen => {
                     warn!("Circuit breaker for '{}' reopening after failure in half-open state", 
-                        self.operation_name);
+                        self.op_name);
                     state.state = CircuitState::Open;
                     state.success_count = 0;
                 },
@@ -288,7 +288,7 @@ where
         }
     }
 
-    fn should_attempt_call(&self) -> Result<CircuitState, OperationError> {
+    fn should_attempt_call(&self) -> Result<CircuitState, OpError> {
         if let Ok(mut state) = self.state.lock() {
             match state.state {
                 CircuitState::Closed => Ok(CircuitState::Closed),
@@ -297,24 +297,24 @@ where
                     if let Some(last_failure) = state.last_failure_time {
                         if last_failure.elapsed() >= self.config.recovery_timeout {
                             info!("Circuit breaker for '{}' transitioning to half-open for testing", 
-                                self.operation_name);
+                                self.op_name);
                             state.state = CircuitState::HalfOpen;
                             state.success_count = 0;
                             Ok(CircuitState::HalfOpen)
                         } else {
-                            Err(OperationError::ExecutionFailed(
-                                format!("Circuit breaker is OPEN for '{}'", self.operation_name)
+                            Err(OpError::ExecutionFailed(
+                                format!("Circuit breaker is OPEN for '{}'", self.op_name)
                             ))
                         }
                     } else {
-                        Err(OperationError::ExecutionFailed(
-                            format!("Circuit breaker is OPEN for '{}'", self.operation_name)
+                        Err(OpError::ExecutionFailed(
+                            format!("Circuit breaker is OPEN for '{}'", self.op_name)
                         ))
                     }
                 }
             }
         } else {
-            Err(OperationError::ExecutionFailed(
+            Err(OpError::ExecutionFailed(
                 "Failed to acquire circuit breaker state lock".to_string()
             ))
         }
@@ -322,15 +322,15 @@ where
 }
 
 #[async_trait]
-impl<T> Operation<T> for CircuitBreakerOperation<T>
+impl<T> Op<T> for CircuitBreakerOp<T>
 where
     T: Send + 'static,
 {
-    async fn perform(&self, context: &mut OperationalContext) -> Result<T, OperationError> {
+    async fn perform(&self, context: &mut OpContext) -> Result<T, OpError> {
         // Check if we should attempt the call
         self.should_attempt_call()?;
 
-        match self.operation.perform(context).await {
+        match self.op.perform(context).await {
             Ok(result) => {
                 self.update_state_on_success();
                 Ok(result)
@@ -338,7 +338,7 @@ where
             Err(error) => {
                 let new_state = self.update_state_on_failure();
                 if new_state == CircuitState::Open {
-                    warn!("Circuit breaker for '{}' is now OPEN", self.operation_name);
+                    warn!("Circuit breaker for '{}' is now OPEN", self.op_name);
                 }
                 Err(error)
             }
@@ -346,79 +346,79 @@ where
     }
 }
 
-/// Fallback operation wrapper
-pub struct FallbackOperation<T> {
-    primary: Box<dyn Operation<T>>,
-    fallback: Box<dyn Operation<T>>,
-    operation_name: String,
-    fallback_predicate: Option<Box<dyn Fn(&OperationError) -> bool + Send + Sync>>,
+/// Fallback op wrapper
+pub struct FallbackOp<T> {
+    primary: Box<dyn Op<T>>,
+    fallback: Box<dyn Op<T>>,
+    op_name: String,
+    fallback_predicate: Option<Box<dyn Fn(&OpError) -> bool + Send + Sync>>,
 }
 
-impl<T> FallbackOperation<T>
+impl<T> FallbackOp<T>
 where
     T: Send + 'static,
 {
-    pub fn new(primary: Box<dyn Operation<T>>, fallback: Box<dyn Operation<T>>) -> Self {
+    pub fn new(primary: Box<dyn Op<T>>, fallback: Box<dyn Op<T>>) -> Self {
         Self {
             primary,
             fallback,
-            operation_name: "FallbackOperation".to_string(),
+            op_name: "FallbackOp".to_string(),
             fallback_predicate: None,
         }
     }
 
     pub fn with_name(mut self, name: String) -> Self {
-        self.operation_name = name;
+        self.op_name = name;
         self
     }
 
     pub fn with_fallback_predicate<F>(mut self, predicate: F) -> Self 
     where 
-        F: Fn(&OperationError) -> bool + Send + Sync + 'static,
+        F: Fn(&OpError) -> bool + Send + Sync + 'static,
     {
         self.fallback_predicate = Some(Box::new(predicate));
         self
     }
 
-    fn should_fallback(&self, error: &OperationError) -> bool {
+    fn should_fallback(&self, error: &OpError) -> bool {
         if let Some(predicate) = &self.fallback_predicate {
             predicate(error)
         } else {
             // Default: fallback on any error except context errors
-            !matches!(error, OperationError::Context(_))
+            !matches!(error, OpError::Context(_))
         }
     }
 }
 
 #[async_trait]
-impl<T> Operation<T> for FallbackOperation<T>
+impl<T> Op<T> for FallbackOp<T>
 where
     T: Send + 'static,
 {
-    async fn perform(&self, context: &mut OperationalContext) -> Result<T, OperationError> {
+    async fn perform(&self, context: &mut OpContext) -> Result<T, OpError> {
         match self.primary.perform(context).await {
             Ok(result) => Ok(result),
             Err(error) => {
                 if self.should_fallback(&error) {
-                    warn!("Primary operation '{}' failed, attempting fallback: {:?}", 
-                        self.operation_name, error);
+                    warn!("Primary op '{}' failed, attempting fallback: {:?}", 
+                        self.op_name, error);
                     
                     match self.fallback.perform(context).await {
                         Ok(result) => {
-                            info!("Fallback operation '{}' succeeded", self.operation_name);
+                            info!("Fallback op '{}' succeeded", self.op_name);
                             Ok(result)
                         },
                         Err(fallback_error) => {
                             error!("Both primary and fallback failed for '{}'. Primary: {:?}, Fallback: {:?}", 
-                                self.operation_name, error, fallback_error);
-                            Err(OperationError::ExecutionFailed(
+                                self.op_name, error, fallback_error);
+                            Err(OpError::ExecutionFailed(
                                 format!("Primary failed: {:?}, Fallback failed: {:?}", error, fallback_error)
                             ))
                         }
                     }
                 } else {
-                    warn!("Primary operation '{}' failed with non-fallback error: {:?}", 
-                        self.operation_name, error);
+                    warn!("Primary op '{}' failed with non-fallback error: {:?}", 
+                        self.op_name, error);
                     Err(error)
                 }
             }
@@ -427,30 +427,30 @@ where
 }
 
 /// Comprehensive resilience wrapper combining retry, circuit breaker, and fallback
-pub struct ResilientOperation<T> {
-    operation: Box<dyn Operation<T>>,
+pub struct ResilientOp<T> {
+    op: Box<dyn Op<T>>,
     retry_strategy: Option<RetryStrategy>,
     circuit_config: Option<CircuitBreakerConfig>,
-    fallback: Option<Box<dyn Operation<T>>>,
-    operation_name: String,
+    fallback: Option<Box<dyn Op<T>>>,
+    op_name: String,
 }
 
-impl<T> ResilientOperation<T>
+impl<T> ResilientOp<T>
 where
     T: Send + 'static,
 {
-    pub fn new(operation: Box<dyn Operation<T>>) -> Self {
+    pub fn new(op: Box<dyn Op<T>>) -> Self {
         Self {
-            operation,
+            op,
             retry_strategy: None,
             circuit_config: None,
             fallback: None,
-            operation_name: "ResilientOperation".to_string(),
+            op_name: "ResilientOp".to_string(),
         }
     }
 
     pub fn with_name(mut self, name: String) -> Self {
-        self.operation_name = name;
+        self.op_name = name;
         self
     }
 
@@ -464,70 +464,70 @@ where
         self
     }
 
-    pub fn with_fallback(mut self, fallback: Box<dyn Operation<T>>) -> Self {
+    pub fn with_fallback(mut self, fallback: Box<dyn Op<T>>) -> Self {
         self.fallback = Some(fallback);
         self
     }
 
-    pub fn build(self) -> Box<dyn Operation<T>> {
-        let mut operation = self.operation;
+    pub fn build(self) -> Box<dyn Op<T>> {
+        let mut op = self.op;
 
         // Apply circuit breaker first (innermost)
         if let Some(config) = self.circuit_config {
-            operation = Box::new(CircuitBreakerOperation::new(operation, config)
-                .with_name(format!("CB[{}]", self.operation_name)));
+            op = Box::new(CircuitBreakerOp::new(op, config)
+                .with_name(format!("CB[{}]", self.op_name)));
         }
 
         // Apply retry
         if let Some(strategy) = self.retry_strategy {
-            operation = Box::new(RetryOperation::new(operation, strategy)
-                .with_name(format!("Retry[{}]", self.operation_name)));
+            op = Box::new(RetryOp::new(op, strategy)
+                .with_name(format!("Retry[{}]", self.op_name)));
         }
 
         // Apply fallback (outermost)
         if let Some(fallback) = self.fallback {
-            operation = Box::new(FallbackOperation::new(operation, fallback)
-                .with_name(format!("Fallback[{}]", self.operation_name)));
+            op = Box::new(FallbackOp::new(op, fallback)
+                .with_name(format!("Fallback[{}]", self.op_name)));
         }
 
-        operation
+        op
     }
 }
 
-/// Convenience functions for creating resilient operations
+/// Convenience functions for creating resilient ops
 
-pub fn with_retry<T>(operation: Box<dyn Operation<T>>, strategy: RetryStrategy) -> RetryOperation<T>
+pub fn with_retry<T>(op: Box<dyn Op<T>>, strategy: RetryStrategy) -> RetryOp<T>
 where
     T: Send + 'static,
 {
-    RetryOperation::new(operation, strategy)
+    RetryOp::new(op, strategy)
 }
 
-pub fn with_circuit_breaker<T>(operation: Box<dyn Operation<T>>, config: CircuitBreakerConfig) -> CircuitBreakerOperation<T>
+pub fn with_circuit_breaker<T>(op: Box<dyn Op<T>>, config: CircuitBreakerConfig) -> CircuitBreakerOp<T>
 where
     T: Send + 'static,
 {
-    CircuitBreakerOperation::new(operation, config)
+    CircuitBreakerOp::new(op, config)
 }
 
-pub fn with_fallback<T>(primary: Box<dyn Operation<T>>, fallback: Box<dyn Operation<T>>) -> FallbackOperation<T>
+pub fn with_fallback<T>(primary: Box<dyn Op<T>>, fallback: Box<dyn Op<T>>) -> FallbackOp<T>
 where
     T: Send + 'static,
 {
-    FallbackOperation::new(primary, fallback)
+    FallbackOp::new(primary, fallback)
 }
 
-pub fn resilient<T>(operation: Box<dyn Operation<T>>) -> ResilientOperation<T>
+pub fn resilient<T>(op: Box<dyn Op<T>>) -> ResilientOp<T>
 where
     T: Send + 'static,
 {
-    ResilientOperation::new(operation)
+    ResilientOp::new(op)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::operation::ClosureOperation;
+    use crate::op::ClosureOp;
 
     #[test]
     fn test_retry_strategy_fixed() {
@@ -567,25 +567,25 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_retry_operation_success_after_failures() {
+    async fn test_retry_op_success_after_failures() {
         use std::sync::atomic::{AtomicU32, Ordering};
         use std::sync::Arc;
         
         let attempt_count = Arc::new(AtomicU32::new(0));
         let attempt_count_clone = attempt_count.clone();
-        let operation = Box::new(ClosureOperation::new(move |_ctx| {
+        let op = Box::new(ClosureOp::new(move |_ctx| {
             let count = attempt_count_clone.fetch_add(1, Ordering::SeqCst);
             Box::pin(async move {
                 if count < 2 {
-                    Err(OperationError::ExecutionFailed("Simulated failure".to_string()))
+                    Err(OpError::ExecutionFailed("Simulated failure".to_string()))
                 } else {
                     Ok("Success!".to_string())
                 }
             })
         }));
 
-        let retry_op = RetryOperation::new(operation, RetryStrategy::fixed(Duration::from_millis(10), 5));
-        let mut context = OperationalContext::new();
+        let retry_op = RetryOp::new(op, RetryStrategy::fixed(Duration::from_millis(10), 5));
+        let mut context = OpContext::new();
         
         let result = retry_op.perform(&mut context).await;
         assert!(result.is_ok());
@@ -593,20 +593,20 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_retry_operation_max_attempts_exceeded() {
-        let operation = Box::new(ClosureOperation::new(|_ctx| {
+    async fn test_retry_op_max_attempts_exceeded() {
+        let op = Box::new(ClosureOp::new(|_ctx| {
             Box::pin(async move {
-                Err(OperationError::ExecutionFailed("Always fails".to_string()))
+                Err(OpError::ExecutionFailed("Always fails".to_string()))
             })
         }));
 
-        let retry_op: RetryOperation<String> = RetryOperation::new(operation, RetryStrategy::fixed(Duration::from_millis(1), 2));
-        let mut context = OperationalContext::new();
+        let retry_op: RetryOp<String> = RetryOp::new(op, RetryStrategy::fixed(Duration::from_millis(1), 2));
+        let mut context = OpContext::new();
         
         let result = retry_op.perform(&mut context).await;
         assert!(result.is_err());
         match result.unwrap_err() {
-            OperationError::ExecutionFailed(msg) => {
+            OpError::ExecutionFailed(msg) => {
                 assert!(msg.contains("failed after") && msg.contains("retries"));
             },
             _ => panic!("Expected ExecutionFailed"),
@@ -629,17 +629,17 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_fallback_operation_primary_success() {
-        let primary = Box::new(ClosureOperation::new(|_ctx| {
+    async fn test_fallback_op_primary_success() {
+        let primary = Box::new(ClosureOp::new(|_ctx| {
             Box::pin(async move { Ok("Primary result".to_string()) })
         }));
         
-        let fallback = Box::new(ClosureOperation::new(|_ctx| {
+        let fallback = Box::new(ClosureOp::new(|_ctx| {
             Box::pin(async move { Ok("Fallback result".to_string()) })
         }));
 
-        let fallback_op = FallbackOperation::new(primary, fallback);
-        let mut context = OperationalContext::new();
+        let fallback_op = FallbackOp::new(primary, fallback);
+        let mut context = OpContext::new();
         
         let result = fallback_op.perform(&mut context).await;
         assert!(result.is_ok());
@@ -647,19 +647,19 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_fallback_operation_fallback_success() {
-        let primary = Box::new(ClosureOperation::new(|_ctx| {
+    async fn test_fallback_op_fallback_success() {
+        let primary = Box::new(ClosureOp::new(|_ctx| {
             Box::pin(async move { 
-                Err(OperationError::ExecutionFailed("Primary failed".to_string())) 
+                Err(OpError::ExecutionFailed("Primary failed".to_string())) 
             })
         }));
         
-        let fallback = Box::new(ClosureOperation::new(|_ctx| {
+        let fallback = Box::new(ClosureOp::new(|_ctx| {
             Box::pin(async move { Ok("Fallback result".to_string()) })
         }));
 
-        let fallback_op = FallbackOperation::new(primary, fallback);
-        let mut context = OperationalContext::new();
+        let fallback_op = FallbackOp::new(primary, fallback);
+        let mut context = OpContext::new();
         
         let result = fallback_op.perform(&mut context).await;
         assert!(result.is_ok());
@@ -667,18 +667,18 @@ mod tests {
     }
 
     #[tokio::test] 
-    async fn test_resilient_operation_builder() {
-        let operation = Box::new(ClosureOperation::new(|_ctx| {
+    async fn test_resilient_op_builder() {
+        let op = Box::new(ClosureOp::new(|_ctx| {
             Box::pin(async move { Ok(42) })
         }));
 
-        let resilient_op = resilient(operation)
+        let resilient_op = resilient(op)
             .with_name("TestOp".to_string())
             .with_retry(RetryStrategy::fixed(Duration::from_millis(10), 3))
             .with_circuit_breaker(CircuitBreakerConfig::default())
             .build();
 
-        let mut context = OperationalContext::new();
+        let mut context = OpContext::new();
         let result = resilient_op.perform(&mut context).await;
         
         assert!(result.is_ok());

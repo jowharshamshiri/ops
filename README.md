@@ -1,13 +1,13 @@
-# Ops - Rust Operations Framework
+# Ops - Rust Ops Framework
 
-Rust operations framework with composable wrappers and batch execution. Async operation patterns with context management.
+Rust ops framework with composable wrappers and batch execution. Async op patterns with context management.
 
 ## Features
 
 - Async-first design built on tokio
 - Resilience patterns: retry strategies, circuit breakers, fallback
 - Metrics collection with percentiles
-- Composable operation decorators
+- Composable op decorators
 - Resource management with automatic cleanup
 - Test coverage: 74 tests with high pass rate
 - Memory safety with compile-time checks
@@ -27,27 +27,27 @@ tokio = { version = "1.0", features = ["full"] }
 ### Basic Usage
 
 ```rust
-use ops::{Operation, OperationalContext, perform};
+use ops::{Op, OpContext, perform};
 
-// Define a simple operation
-struct GreetingOperation {
+// Define a simple op
+struct GreetingOp {
     name: String,
 }
 
 #[async_trait::async_trait]
-impl Operation<String> for GreetingOperation {
-    async fn execute(&self, _ctx: &OperationalContext) -> Result<String, ops::OperationError> {
+impl Op<String> for GreetingOp {
+    async fn execute(&self, _ctx: &OpContext) -> Result<String, ops::OpError> {
         Ok(format!("Hello, {}!", self.name))
     }
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let operation = GreetingOperation { name: "World".to_string() };
-    let context = OperationalContext::new();
+    let op = GreetingOp { name: "World".to_string() };
+    let context = OpContext::new();
     
     // Execute with automatic logging and error handling
-    let result = perform(operation, &context).await?;
+    let result = perform(op, &context).await?;
     println!("{}", result);
     
     Ok(())
@@ -57,47 +57,47 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 ### Wrapper Composition
 
 ```rust
-use ops::{LoggingWrapper, TimeBoundWrapper, OperationalContext};
+use ops::{LoggingWrapper, TimeBoundWrapper, OpContext};
 
 // Compose wrappers for enhanced functionality
-let operation = TimeBoundWrapper::new(
-    LoggingWrapper::new(GreetingOperation { name: "World".to_string() }),
+let op = TimeBoundWrapper::new(
+    LoggingWrapper::new(GreetingOp { name: "World".to_string() }),
     Duration::from_secs(5)
 );
 
-let result = operation.execute(&context).await?;
+let result = op.execute(&context).await?;
 ```
 
-### Batch Operations
+### Batch Ops
 
 ```rust
-use ops::{BatchOperation, OperationalContext};
+use ops::{BatchOp, OpContext};
 
-// Execute operations in parallel with concurrency control
-let operations = vec![
-    Box::new(GreetingOperation { name: "Alice".to_string() }),
-    Box::new(GreetingOperation { name: "Bob".to_string() }),
-    Box::new(GreetingOperation { name: "Charlie".to_string() }),
+// Execute ops in parallel with concurrency control
+let ops = vec![
+    Box::new(GreetingOp { name: "Alice".to_string() }),
+    Box::new(GreetingOp { name: "Bob".to_string() }),
+    Box::new(GreetingOp { name: "Charlie".to_string() }),
 ];
 
-let batch = BatchOperation::parallel(operations, Some(2)); // Max 2 concurrent
+let batch = BatchOp::parallel(ops, Some(2)); // Max 2 concurrent
 let results = batch.execute(&context).await?;
 ```
 
 ### Resilience Patterns
 
 ```rust
-use ops::{RetryOperation, RetryStrategy, CircuitBreakerOperation};
+use ops::{RetryOp, RetryStrategy, CircuitBreakerOp};
 use std::time::Duration;
 
 // Retry with exponential backoff
-let retry_op = RetryOperation::new(
-    GreetingOperation { name: "World".to_string() },
+let retry_op = RetryOp::new(
+    GreetingOp { name: "World".to_string() },
     RetryStrategy::exponential(Duration::from_millis(100), 2.0, 3)
 );
 
 // Circuit breaker protection
-let circuit_op = CircuitBreakerOperation::new(
+let circuit_op = CircuitBreakerOp::new(
     retry_op,
     5,  // failure_threshold
     Duration::from_secs(60)  // timeout
@@ -110,10 +110,10 @@ let result = circuit_op.execute(&context).await?;
 
 ### Core Components
 
-- **Operation Trait**: Async trait for all operations with generic return types
-- **OperationalContext**: Thread-safe context with serialization support
+- **Op Trait**: Async trait for all ops with generic return types
+- **OpContext**: Thread-safe context with serialization support
 - **Wrapper Pattern**: Composable decorators (logging, timeout, metrics)
-- **Batch Operations**: Sequential and parallel execution with error handling
+- **Batch Ops**: Sequential and parallel execution with error handling
 - **Resilience Framework**: Retry, circuit breaker, and fallback strategies
 - **Resource Management**: RAII-based cleanup with automatic pooling
 
@@ -121,7 +121,7 @@ let result = circuit_op.execute(&context).await?;
 
 - **Metrics Collection**: Automatic performance tracking and telemetry
 - **HTML Processing**: Metadata extraction framework (feature-flagged)
-- **JSON Operations**: Serialization/deserialization with validation
+- **JSON Ops**: Serialization/deserialization with validation
 - **Context Factories**: Lazy initialization patterns for dependencies
 - **Error Propagation**: Rich error context through wrapper chains
 
@@ -161,9 +161,9 @@ cargo test --release bench
 - [Feature Status](internal/FEATURES.md) - Implementation progress and testing
 - [API Documentation](https://docs.rs/ops) - Generated from code comments
 
-## Operation Patterns
+## Op Patterns
 
-Framework provides operation patterns including:
+Framework provides op patterns including:
 
 - Async capabilities with tokio
 - Error handling and type safety

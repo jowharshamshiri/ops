@@ -1,24 +1,24 @@
 use thiserror::Error;
 
 #[derive(Error, Debug)]
-pub enum OperationError {
-    #[error("Operation execution failed: {0}")]
+pub enum OpError {
+    #[error("Op execution failed: {0}")]
     ExecutionFailed(String),
     
-    #[error("Operation timeout after {timeout_ms}ms")]
+    #[error("Op timeout after {timeout_ms}ms")]
     Timeout { timeout_ms: u64 },
     
     #[error("Context error: {0}")]
     Context(String),
     
-    #[error("Batch operation failed: {0}")]
+    #[error("Batch op failed: {0}")]
     BatchFailed(String),
     
     #[error(transparent)]
     Other(#[from] Box<dyn std::error::Error + Send + Sync>),
 }
 
-impl Clone for OperationError {
+impl Clone for OpError {
     fn clone(&self) -> Self {
         match self {
             Self::ExecutionFailed(msg) => Self::ExecutionFailed(msg.clone()),

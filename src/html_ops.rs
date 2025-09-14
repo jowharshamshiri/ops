@@ -1,9 +1,9 @@
-// HTML Metadata Extraction Operations
+// HTML Metadata Extraction Ops
 // Equivalent to Java ExtractMetaDataOp.java with enhanced Rust capabilities
 
-use crate::operation::Operation;
-use crate::context::OperationalContext;
-use crate::error::OperationError;
+use crate::op::Op;
+use crate::context::OpContext;
+use crate::error::OpError;
 use async_trait::async_trait;
 use serde::{Serialize, Deserialize};
 use std::collections::HashMap;
@@ -173,16 +173,16 @@ impl HtmlMetadata {
     }
 }
 
-/// HTML Metadata Extraction Operation
+/// HTML Metadata Extraction Op
 /// Equivalent to Java ExtractMetaDataOp.java
-pub struct ExtractMetaDataOperation {
+pub struct ExtractMetaDataOp {
     html_content: String,
     meta_definitions: Vec<MetaDefinition>,
     extract_title: bool,
     extract_all_meta: bool,
 }
 
-impl ExtractMetaDataOperation {
+impl ExtractMetaDataOp {
     pub fn new(html_content: String) -> Self {
         Self {
             html_content,
@@ -236,7 +236,7 @@ impl ExtractMetaDataOperation {
 
     /// Parse HTML and extract metadata using simple regex patterns
     /// Note: In a real implementation, you'd use a proper HTML parser like scraper
-    fn extract_metadata_simple(&self) -> Result<HtmlMetadata, OperationError> {
+    fn extract_metadata_simple(&self) -> Result<HtmlMetadata, OpError> {
         let mut metadata = HtmlMetadata::new();
         
         // Extract title
@@ -340,12 +340,12 @@ impl ExtractMetaDataOperation {
 }
 
 #[async_trait]
-impl Operation<HtmlMetadata> for ExtractMetaDataOperation {
-    async fn perform(&self, _context: &mut OperationalContext) -> Result<HtmlMetadata, OperationError> {
+impl Op<HtmlMetadata> for ExtractMetaDataOp {
+    async fn perform(&self, _context: &mut OpContext) -> Result<HtmlMetadata, OpError> {
         // Add regex dependency check
         #[cfg(not(feature = "html-parsing"))]
         {
-            return Err(OperationError::ExecutionFailed(
+            return Err(OpError::ExecutionFailed(
                 "HTML parsing requires 'html-parsing' feature. Add regex dependency and enable feature.".to_string()
             ));
         }
@@ -357,26 +357,26 @@ impl Operation<HtmlMetadata> for ExtractMetaDataOperation {
     }
 }
 
-/// Convenience function to create HTML metadata extraction operation
-pub fn extract_html_metadata(html_content: String) -> ExtractMetaDataOperation {
-    ExtractMetaDataOperation::new(html_content)
+/// Convenience function to create HTML metadata extraction op
+pub fn extract_html_metadata(html_content: String) -> ExtractMetaDataOp {
+    ExtractMetaDataOp::new(html_content)
 }
 
-/// Enhanced HTML metadata operation with URL fetching capability
-pub struct FetchAndExtractMetaDataOperation {
+/// Enhanced HTML metadata op with URL fetching capability
+pub struct FetchAndExtractMetaDataOp {
     url: String,
     user_agent: Option<String>,
     timeout_seconds: u64,
     meta_definitions: Vec<MetaDefinition>,
 }
 
-impl FetchAndExtractMetaDataOperation {
+impl FetchAndExtractMetaDataOp {
     pub fn new(url: String) -> Self {
         Self {
             url,
             user_agent: Some("Mozilla/5.0 (compatible; RustOpsBot/1.0)".to_string()),
             timeout_seconds: 30,
-            meta_definitions: ExtractMetaDataOperation::default_meta_definitions(),
+            meta_definitions: ExtractMetaDataOp::default_meta_definitions(),
         }
     }
 
@@ -397,10 +397,10 @@ impl FetchAndExtractMetaDataOperation {
 }
 
 #[async_trait]
-impl Operation<HtmlMetadata> for FetchAndExtractMetaDataOperation {
-    async fn perform(&self, _context: &mut OperationalContext) -> Result<HtmlMetadata, OperationError> {
+impl Op<HtmlMetadata> for FetchAndExtractMetaDataOp {
+    async fn perform(&self, _context: &mut OpContext) -> Result<HtmlMetadata, OpError> {
         // This would require reqwest dependency for HTTP fetching
-        Err(OperationError::ExecutionFailed(
+        Err(OpError::ExecutionFailed(
             "HTTP fetching requires 'reqwest' dependency. Feature not implemented in basic version.".to_string()
         ))
     }
@@ -507,7 +507,7 @@ mod tests {
 
     #[test]
     fn test_default_meta_definitions() {
-        let definitions = ExtractMetaDataOperation::default_meta_definitions();
+        let definitions = ExtractMetaDataOp::default_meta_definitions();
         
         // Should include basic meta tags
         assert!(definitions.iter().any(|def| def.name == "description"));
@@ -524,7 +524,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_extract_metadata_operation_without_feature() {
+    async fn test_extract_metadata_op_without_feature() {
         let html = r#"
         <!DOCTYPE html>
         <html>
@@ -537,15 +537,15 @@ mod tests {
         </html>
         "#;
 
-        let operation = ExtractMetaDataOperation::new(html.to_string());
-        let mut context = OperationalContext::new();
+        let op = ExtractMetaDataOp::new(html.to_string());
+        let mut context = OpContext::new();
         
-        let result = operation.perform(&mut context).await;
+        let result = op.perform(&mut context).await;
         
         // Should fail without html-parsing feature
         assert!(result.is_err());
         match result.unwrap_err() {
-            OperationError::ExecutionFailed(msg) => {
+            OpError::ExecutionFailed(msg) => {
                 assert!(msg.contains("html-parsing"));
             },
             _ => panic!("Expected ExecutionFailed error"),
@@ -578,18 +578,18 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_fetch_and_extract_operation() {
-        let operation = FetchAndExtractMetaDataOperation::new("https://example.com".to_string())
+    async fn test_fetch_and_extract_op() {
+        let op = FetchAndExtractMetaDataOp::new("https://example.com".to_string())
             .with_user_agent("TestBot/1.0".to_string())
             .with_timeout(10);
         
-        let mut context = OperationalContext::new();
-        let result = operation.perform(&mut context).await;
+        let mut context = OpContext::new();
+        let result = op.perform(&mut context).await;
         
         // Should fail without reqwest dependency
         assert!(result.is_err());
         match result.unwrap_err() {
-            OperationError::ExecutionFailed(msg) => {
+            OpError::ExecutionFailed(msg) => {
                 assert!(msg.contains("reqwest"));
             },
             _ => panic!("Expected ExecutionFailed error"),

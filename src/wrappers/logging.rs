@@ -1,9 +1,9 @@
 // LoggingWrapper implementation with full Java reference functionality
 // Implements LoggingOpWrapper.java patterns with Rust enhancements
 
-use crate::operation::Operation;
-use crate::context::OperationalContext;
-use crate::error::OperationError;
+use crate::op::Op;
+use crate::context::OpContext;
+use crate::error::OpError;
 use async_trait::async_trait;
 use log::{info, error};
 use std::time::Instant;
@@ -15,27 +15,27 @@ const RED: &str = "\x1b[31m";
 const RESET: &str = "\x1b[0m";
 
 pub struct LoggingWrapper<T> {
-    wrapped_operation: Box<dyn Operation<T>>,
-    operation_name: String,
+    wrapped_op: Box<dyn Op<T>>,
+    op_name: String,
     logger_name: Option<String>,
 }
 
 impl<T> LoggingWrapper<T> {
-    /// Create new logging wrapper with operation name
-    pub fn new(operation: Box<dyn Operation<T>>, name: String) -> Self {
+    /// Create new logging wrapper with op name
+    pub fn new(op: Box<dyn Op<T>>, name: String) -> Self {
         Self {
-            wrapped_operation: operation,
-            operation_name: name,
+            wrapped_op: op,
+            op_name: name,
             logger_name: None,
         }
     }
 
     /// Create logging wrapper with custom logger name
     /// Equivalent to dynamic logger creation in Java
-    pub fn with_logger(operation: Box<dyn Operation<T>>, name: String, logger_name: String) -> Self {
+    pub fn with_logger(op: Box<dyn Op<T>>, name: String, logger_name: String) -> Self {
         Self {
-            wrapped_operation: operation,
-            operation_name: name,
+            wrapped_op: op,
+            op_name: name,
             logger_name: Some(logger_name),
         }
     }
@@ -45,38 +45,38 @@ impl<T> LoggingWrapper<T> {
         self.logger_name.as_deref().unwrap_or("LoggingWrapper")
     }
 
-    /// Log operation start with ANSI colors
-    fn log_operation_start(&self) {
+    /// Log op start with ANSI colors
+    fn log_op_start(&self) {
         info!(
             target: self.get_logger_name(),
-            "{}Starting operation: {}{}", 
+            "{}Starting op: {}{}", 
             YELLOW, 
-            self.operation_name,
+            self.op_name,
             RESET
         );
     }
 
-    /// Log operation completion with timing
-    fn log_operation_success(&self, duration: std::time::Duration) {
+    /// Log op completion with timing
+    fn log_op_success(&self, duration: std::time::Duration) {
         let seconds = duration.as_secs_f64();
         info!(
             target: self.get_logger_name(),
-            "{}Operation '{}' completed in {:.3} seconds{}", 
+            "{}Op '{}' completed in {:.3} seconds{}", 
             GREEN,
-            self.operation_name, 
+            self.op_name, 
             seconds,
             RESET
         );
     }
 
-    /// Log operation failure with full error context
-    fn log_operation_failure(&self, error: &OperationError, duration: std::time::Duration) {
+    /// Log op failure with full error context
+    fn log_op_failure(&self, error: &OpError, duration: std::time::Duration) {
         let seconds = duration.as_secs_f64();
         error!(
             target: self.get_logger_name(),
-            "{}Operation '{}' failed after {:.3} seconds: {:?}{}", 
+            "{}Op '{}' failed after {:.3} seconds: {:?}{}", 
             RED,
-            self.operation_name,
+            self.op_name,
             seconds, 
             error,
             RESET
@@ -85,29 +85,29 @@ impl<T> LoggingWrapper<T> {
 }
 
 #[async_trait]
-impl<T> Operation<T> for LoggingWrapper<T>
+impl<T> Op<T> for LoggingWrapper<T>
 where
     T: Send + 'static,
 {
-    async fn perform(&self, context: &mut OperationalContext) -> Result<T, OperationError> {
+    async fn perform(&self, context: &mut OpContext) -> Result<T, OpError> {
         let start_time = Instant::now();
         
-        // Log operation start with yellow color
-        self.log_operation_start();
+        // Log op start with yellow color
+        self.log_op_start();
         
-        // Execute wrapped operation
-        let result = self.wrapped_operation.perform(context).await;
+        // Execute wrapped op
+        let result = self.wrapped_op.perform(context).await;
         
         let duration = start_time.elapsed();
         
         // Log result with appropriate color and timing
         match &result {
-            Ok(_) => self.log_operation_success(duration),
+            Ok(_) => self.log_op_success(duration),
             Err(error) => {
-                self.log_operation_failure(error, duration);
-                // Re-wrap error with operation context (matches Java behavior)
-                return Err(crate::ops::wrap_nested_op_exception(&self.operation_name, 
-                    OperationError::ExecutionFailed(format!("{:?}", error))));
+                self.log_op_failure(error, duration);
+                // Re-wrap error with op context (matches Java behavior)
+                return Err(crate::ops::wrap_nested_op_exception(&self.op_name, 
+                    OpError::ExecutionFailed(format!("{:?}", error))));
             }
         }
         
@@ -117,31 +117,31 @@ where
 
 /// Create logger with dynamic name based on caller context
 /// Equivalent to Java's getCallerCallerClassName() usage
-pub fn create_context_aware_logger<T>(operation: Box<dyn Operation<T>>) -> LoggingWrapper<T> 
+pub fn create_context_aware_logger<T>(op: Box<dyn Op<T>>) -> LoggingWrapper<T> 
 where 
     T: Send + 'static,
 {
-    let caller_name = crate::ops::get_caller_operation_name();
-    LoggingWrapper::with_logger(operation, caller_name.clone(), caller_name)
+    let caller_name = crate::ops::get_caller_op_name();
+    LoggingWrapper::with_logger(op, caller_name.clone(), caller_name)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::operation::{Operation, ClosureOperation};
-    use crate::context::OperationalContext;
+    use crate::op::{Op, ClosureOp};
+    use crate::context::OpContext;
 
     #[tokio::test]
     async fn test_logging_wrapper_success() {
         env_logger::try_init().ok(); // Initialize logger for tests
         
-        let mut context = OperationalContext::new();
+        let mut context = OpContext::new();
         
-        let operation = Box::new(ClosureOperation::new(|_ctx| {
+        let op = Box::new(ClosureOp::new(|_ctx| {
             Box::pin(async move { Ok(42) })
         }));
         
-        let logging_wrapper = LoggingWrapper::new(operation, "TestOperation".to_string());
+        let logging_wrapper = LoggingWrapper::new(op, "TestOp".to_string());
         let result = logging_wrapper.perform(&mut context).await;
         
         assert!(result.is_ok());
@@ -152,21 +152,21 @@ mod tests {
     async fn test_logging_wrapper_failure() {
         env_logger::try_init().ok();
         
-        let mut context = OperationalContext::new();
+        let mut context = OpContext::new();
         
-        let operation = Box::new(ClosureOperation::new(|_ctx| {
+        let op = Box::new(ClosureOp::new(|_ctx| {
             Box::pin(async move { 
-                Err(OperationError::ExecutionFailed("test error".to_string())) 
+                Err(OpError::ExecutionFailed("test error".to_string())) 
             })
         }));
         
-        let logging_wrapper: LoggingWrapper<i32> = LoggingWrapper::new(operation, "FailingOperation".to_string());
+        let logging_wrapper: LoggingWrapper<i32> = LoggingWrapper::new(op, "FailingOp".to_string());
         let result = logging_wrapper.perform(&mut context).await;
         
         assert!(result.is_err());
         match result.unwrap_err() {
-            OperationError::ExecutionFailed(msg) => {
-                assert!(msg.contains("FailingOperation"));
+            OpError::ExecutionFailed(msg) => {
+                assert!(msg.contains("FailingOp"));
             },
             _ => panic!("Expected ExecutionFailed error"),
         }
@@ -174,13 +174,13 @@ mod tests {
 
     #[tokio::test]
     async fn test_context_aware_logger() {
-        let mut context = OperationalContext::new();
+        let mut context = OpContext::new();
         
-        let operation = Box::new(ClosureOperation::new(|_ctx| {
+        let op = Box::new(ClosureOp::new(|_ctx| {
             Box::pin(async move { Ok("test".to_string()) })
         }));
         
-        let logging_wrapper = create_context_aware_logger(operation);
+        let logging_wrapper = create_context_aware_logger(op);
         let result = logging_wrapper.perform(&mut context).await;
         
         assert!(result.is_ok());

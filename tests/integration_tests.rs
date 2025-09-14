@@ -2,9 +2,9 @@
 // Tests end-to-end functionality with all implemented features
 
 use ops::{
-    OperationalContext, HollowOpContext, ContextProvider, Operation, ClosureOperation,
-    BatchOperation, LoggingWrapper, TimeBoundWrapper, OperationError,
-    perform, get_caller_operation_name, wrap_nested_op_exception,
+    OpContext, HollowOpContext, ContextProvider, Op, ClosureOp,
+    BatchOp, LoggingWrapper, TimeBoundWrapper, OpError,
+    perform, get_caller_op_name, wrap_nested_op_exception,
     serialize_to_json, serialize_to_pretty_json, deserialize_json
 };
 use serde::{Serialize, Deserialize};
@@ -25,7 +25,7 @@ async fn test_complete_ops_java_compatibility() {
     env_logger::try_init().ok();
     
     // Create context with builder pattern (Java OpContext.build equivalent)
-    let mut context = OperationalContext::new()
+    let mut context = OpContext::new()
         .build("request_id", "test-123")
         .build("user_id", 42u32);
         
@@ -55,19 +55,19 @@ async fn test_complete_ops_java_compatibility() {
     // Test wrapper composition (LoggingWrapper + TimeBoundWrapper)
     let json_op = Box::new(serialize_to_pretty_json(user.clone()));
     let timeout_wrapper = TimeBoundWrapper::with_name(json_op, Duration::from_millis(100), "PrettyJsonOp".to_string());
-    let logged_timeout_op = LoggingWrapper::new(Box::new(timeout_wrapper), "CompositeOperation".to_string());
+    let logged_timeout_op = LoggingWrapper::new(Box::new(timeout_wrapper), "CompositeOp".to_string());
     
     let pretty_json = logged_timeout_op.perform(&mut context).await.unwrap();
     assert!(pretty_json.contains("John Doe"));
     assert!(pretty_json.contains('\n')); // Pretty formatted
     
-    // Test batch operations
-    let operations: Vec<Arc<dyn Operation<String>>> = vec![
+    // Test batch ops
+    let ops: Vec<Arc<dyn Op<String>>> = vec![
         Arc::new(serialize_to_json(user.clone())),
         Arc::new(serialize_to_pretty_json(user.clone())),
     ];
     
-    let batch_op = BatchOperation::new(operations);
+    let batch_op = BatchOp::new(ops);
     let batch_results = batch_op.perform(&mut context).await.unwrap();
     assert_eq!(batch_results.len(), 2);
     assert!(batch_results[0].contains("John Doe"));
@@ -77,12 +77,12 @@ async fn test_complete_ops_java_compatibility() {
 #[tokio::test]
 async fn test_error_handling_and_wrapper_chains() {
     env_logger::try_init().ok();
-    let mut context = OperationalContext::new();
+    let mut context = OpContext::new();
     
-    // Create operation that will fail
-    let failing_op = Box::new(ClosureOperation::new(|_ctx| {
+    // Create op that will fail
+    let failing_op = Box::new(ClosureOp::new(|_ctx| {
         Box::pin(async move {
-            Err(OperationError::ExecutionFailed("Simulated failure".to_string()))
+            Err(OpError::ExecutionFailed("Simulated failure".to_string()))
         })
     }));
     
@@ -93,9 +93,9 @@ async fn test_error_handling_and_wrapper_chains() {
     let result = logged_op.perform(&mut context).await;
     assert!(result.is_err());
     
-    // Verify error wrapping with operation context
+    // Verify error wrapping with op context
     match result.unwrap_err() {
-        OperationError::ExecutionFailed(msg) => {
+        OpError::ExecutionFailed(msg) => {
             assert!(msg.contains("TestFailure"));
         },
         _ => panic!("Expected wrapped ExecutionFailed error"),
@@ -115,8 +115,8 @@ async fn test_hollow_context_pattern() {
     // Test hollow context conversion
     let mut hollow_context = HollowOpContext::new().to_context();
     
-    // Operations should still work with hollow context (but with warnings)
-    let simple_op = ClosureOperation::new(|_ctx| {
+    // Ops should still work with hollow context (but with warnings)
+    let simple_op = ClosureOp::new(|_ctx| {
         Box::pin(async move {
             Ok("hollow_result".to_string())
         })
@@ -130,7 +130,7 @@ async fn test_hollow_context_pattern() {
 #[tokio::test]
 async fn test_parallel_batch_with_wrappers() {
     env_logger::try_init().ok();
-    let mut context = OperationalContext::new();
+    let mut context = OpContext::new();
     
     let users = vec![
         User { id: 1, name: "Alice".to_string(), email: "alice@example.com".to_string(), active: true },
@@ -138,17 +138,17 @@ async fn test_parallel_batch_with_wrappers() {
         User { id: 3, name: "Charlie".to_string(), email: "charlie@example.com".to_string(), active: true },
     ];
     
-    // Create wrapped operations for parallel execution
-    let wrapped_operations: Vec<Arc<dyn Operation<String>>> = users.into_iter().map(|user| {
+    // Create wrapped ops for parallel execution
+    let wrapped_ops: Vec<Arc<dyn Op<String>>> = users.into_iter().map(|user| {
         let user_id = user.id;
         let serialize_op = Box::new(serialize_to_json(user));
         let timeout_op = TimeBoundWrapper::new(serialize_op, Duration::from_millis(100));
         let logged_op = LoggingWrapper::new(Box::new(timeout_op), format!("SerializeUser{}", user_id));
-        Arc::new(logged_op) as Arc<dyn Operation<String>>
+        Arc::new(logged_op) as Arc<dyn Op<String>>
     }).collect();
     
     // Test batch execution (using regular batch since we don't have parallel method)
-    let batch_op = BatchOperation::new(wrapped_operations);
+    let batch_op = BatchOp::new(wrapped_ops);
     let results = batch_op.perform(&mut context).await.unwrap();
     
     assert_eq!(results.len(), 3);
@@ -159,18 +159,18 @@ async fn test_parallel_batch_with_wrappers() {
 
 #[tokio::test]
 async fn test_stack_trace_analysis() {
-    let operation_name = get_caller_operation_name();
-    assert!(operation_name.contains("integration_tests"));
-    assert!(operation_name.contains("::"));
+    let op_name = get_caller_op_name();
+    assert!(op_name.contains("integration_tests"));
+    assert!(op_name.contains("::"));
 }
 
 #[tokio::test]
 async fn test_exception_wrapping_utilities() {
-    let original_error = OperationError::ExecutionFailed("original".to_string());
+    let original_error = OpError::ExecutionFailed("original".to_string());
     let wrapped = wrap_nested_op_exception("TestOp", original_error);
     
     match wrapped {
-        OperationError::ExecutionFailed(msg) => {
+        OpError::ExecutionFailed(msg) => {
             assert!(msg.contains("TestOp"));
             assert!(msg.contains("original"));
         },
@@ -180,7 +180,7 @@ async fn test_exception_wrapping_utilities() {
 
 #[tokio::test]
 async fn test_comprehensive_context_features() {
-    let mut context = OperationalContext::new();
+    let mut context = OpContext::new();
     
     // Test fluent interface
     context = context
@@ -217,9 +217,9 @@ async fn test_comprehensive_context_features() {
 }
 
 #[tokio::test]
-async fn test_json_operation_error_handling() {
+async fn test_json_op_error_handling() {
     env_logger::try_init().ok();
-    let mut context = OperationalContext::new();
+    let mut context = OpContext::new();
     
     // Test invalid JSON deserialization with wrapper chain
     let invalid_json_op = Box::new(deserialize_json::<User>("invalid json".to_string()));
@@ -229,20 +229,20 @@ async fn test_json_operation_error_handling() {
     assert!(result.is_err());
     
     match result.unwrap_err() {
-        OperationError::ExecutionFailed(msg) => {
+        OpError::ExecutionFailed(msg) => {
             assert!(msg.contains("InvalidJsonTest"));
         },
-        _ => panic!("Expected ExecutionFailed with operation context"),
+        _ => panic!("Expected ExecutionFailed with op context"),
     }
 }
 
 #[tokio::test]
 async fn test_timeout_wrapper_functionality() {
     env_logger::try_init().ok();
-    let mut context = OperationalContext::new();
+    let mut context = OpContext::new();
     
-    // Create slow operation
-    let slow_op = Box::new(ClosureOperation::new(|_ctx| {
+    // Create slow op
+    let slow_op = Box::new(ClosureOp::new(|_ctx| {
         Box::pin(async move {
             tokio::time::sleep(Duration::from_millis(200)).await;
             Ok("should_timeout".to_string())
@@ -250,14 +250,14 @@ async fn test_timeout_wrapper_functionality() {
     }));
     
     // Wrap with short timeout
-    let timeout_op = TimeBoundWrapper::with_name(slow_op, Duration::from_millis(50), "SlowOperation".to_string());
+    let timeout_op = TimeBoundWrapper::with_name(slow_op, Duration::from_millis(50), "SlowOp".to_string());
     let logged_timeout_op = LoggingWrapper::new(Box::new(timeout_op), "TimeoutTest".to_string());
     
     let result = logged_timeout_op.perform(&mut context).await;
     assert!(result.is_err());
     
     match result.unwrap_err() {
-        OperationError::ExecutionFailed(msg) => {
+        OpError::ExecutionFailed(msg) => {
             assert!(msg.contains("TimeoutTest"));
         },
         _ => panic!("Expected wrapped timeout error"),

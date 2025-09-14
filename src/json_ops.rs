@@ -1,16 +1,16 @@
-// JSON operation examples - equivalent to Java op/ directory
+// JSON op examples - equivalent to Java op/ directory
 // Implements DeserializeJsonOp and SerializeToJsonOp with serde_json
 
-use crate::operation::Operation;
-use crate::context::OperationalContext;
-use crate::error::OperationError;
+use crate::op::Op;
+use crate::context::OpContext;
+use crate::error::OpError;
 use async_trait::async_trait;
 use serde::{Serialize, Deserialize};
 use serde_json;
 
-/// JSON deserialization operation
+/// JSON deserialization op
 /// Equivalent to Java DeserializeJsonOp.java
-pub struct DeserializeJsonOperation<T> 
+pub struct DeserializeJsonOp<T> 
 where 
     T: for<'de> Deserialize<'de> + Send + Sync + 'static,
 {
@@ -18,7 +18,7 @@ where
     _phantom: std::marker::PhantomData<T>,
 }
 
-impl<T> DeserializeJsonOperation<T>
+impl<T> DeserializeJsonOp<T>
 where
     T: for<'de> Deserialize<'de> + Send + Sync + 'static,
 {
@@ -35,28 +35,28 @@ where
 }
 
 #[async_trait]
-impl<T> Operation<T> for DeserializeJsonOperation<T>
+impl<T> Op<T> for DeserializeJsonOp<T>
 where
     T: for<'de> Deserialize<'de> + Send + Sync + 'static,
 {
-    async fn perform(&self, _context: &mut OperationalContext) -> Result<T, OperationError> {
+    async fn perform(&self, _context: &mut OpContext) -> Result<T, OpError> {
         serde_json::from_str(&self.json_string)
-            .map_err(|e| OperationError::ExecutionFailed(
+            .map_err(|e| OpError::ExecutionFailed(
                 format!("JSON deserialization failed: {}", e)
             ))
     }
 }
 
-/// JSON serialization operation  
+/// JSON serialization op  
 /// Equivalent to Java SerializeToJsonOp.java
-pub struct SerializeToJsonOperation<T>
+pub struct SerializeToJsonOp<T>
 where
     T: Serialize + Send + Sync,
 {
     data: T,
 }
 
-impl<T> SerializeToJsonOperation<T>
+impl<T> SerializeToJsonOp<T>
 where
     T: Serialize + Send + Sync,
 {
@@ -66,28 +66,28 @@ where
 }
 
 #[async_trait]
-impl<T> Operation<String> for SerializeToJsonOperation<T>
+impl<T> Op<String> for SerializeToJsonOp<T>
 where
     T: Serialize + Send + Sync,
 {
-    async fn perform(&self, _context: &mut OperationalContext) -> Result<String, OperationError> {
+    async fn perform(&self, _context: &mut OpContext) -> Result<String, OpError> {
         serde_json::to_string(&self.data)
-            .map_err(|e| OperationError::ExecutionFailed(
+            .map_err(|e| OpError::ExecutionFailed(
                 format!("JSON serialization failed: {}", e)
             ))
     }
 }
 
-/// Pretty-print JSON serialization operation
+/// Pretty-print JSON serialization op
 /// Enhancement over Java version
-pub struct SerializeToPrettyJsonOperation<T>
+pub struct SerializeToPrettyJsonOp<T>
 where
     T: Serialize + Send + Sync,
 {
     data: T,
 }
 
-impl<T> SerializeToPrettyJsonOperation<T>
+impl<T> SerializeToPrettyJsonOp<T>
 where
     T: Serialize + Send + Sync,
 {
@@ -97,28 +97,28 @@ where
 }
 
 #[async_trait]
-impl<T> Operation<String> for SerializeToPrettyJsonOperation<T>
+impl<T> Op<String> for SerializeToPrettyJsonOp<T>
 where
     T: Serialize + Send + Sync,
 {
-    async fn perform(&self, _context: &mut OperationalContext) -> Result<String, OperationError> {
+    async fn perform(&self, _context: &mut OpContext) -> Result<String, OpError> {
         serde_json::to_string_pretty(&self.data)
-            .map_err(|e| OperationError::ExecutionFailed(
+            .map_err(|e| OpError::ExecutionFailed(
                 format!("Pretty JSON serialization failed: {}", e)
             ))
     }
 }
 
-/// JSON roundtrip operation (serialize then deserialize for validation)
-/// Enhanced operation not in Java version
-pub struct JsonRoundtripOperation<T>
+/// JSON roundtrip op (serialize then deserialize for validation)
+/// Enhanced op not in Java version
+pub struct JsonRoundtripOp<T>
 where
     T: Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
 {
     data: T,
 }
 
-impl<T> JsonRoundtripOperation<T>
+impl<T> JsonRoundtripOp<T>
 where
     T: Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
 {
@@ -128,58 +128,58 @@ where
 }
 
 #[async_trait]
-impl<T> Operation<T> for JsonRoundtripOperation<T>
+impl<T> Op<T> for JsonRoundtripOp<T>
 where
     T: Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
 {
-    async fn perform(&self, _context: &mut OperationalContext) -> Result<T, OperationError> {
+    async fn perform(&self, _context: &mut OpContext) -> Result<T, OpError> {
         // First serialize to JSON
         let json_string = serde_json::to_string(&self.data)
-            .map_err(|e| OperationError::ExecutionFailed(
+            .map_err(|e| OpError::ExecutionFailed(
                 format!("JSON serialization failed in roundtrip: {}", e)
             ))?;
 
         // Then deserialize back
         serde_json::from_str(&json_string)
-            .map_err(|e| OperationError::ExecutionFailed(
+            .map_err(|e| OpError::ExecutionFailed(
                 format!("JSON deserialization failed in roundtrip: {}", e)
             ))
     }
 }
 
-/// Convenience functions for creating JSON operations
+/// Convenience functions for creating JSON ops
 /// Similar to Java static factory methods
 
-/// Create a deserialization operation from JSON string
-pub fn deserialize_json<T>(json_string: String) -> DeserializeJsonOperation<T>
+/// Create a deserialization op from JSON string
+pub fn deserialize_json<T>(json_string: String) -> DeserializeJsonOp<T>
 where
     T: for<'de> Deserialize<'de> + Send + Sync + 'static,
 {
-    DeserializeJsonOperation::new(json_string)
+    DeserializeJsonOp::new(json_string)
 }
 
-/// Create a serialization operation from data
-pub fn serialize_to_json<T>(data: T) -> SerializeToJsonOperation<T>
+/// Create a serialization op from data
+pub fn serialize_to_json<T>(data: T) -> SerializeToJsonOp<T>
 where
     T: Serialize + Send + Sync,
 {
-    SerializeToJsonOperation::new(data)
+    SerializeToJsonOp::new(data)
 }
 
-/// Create a pretty serialization operation from data
-pub fn serialize_to_pretty_json<T>(data: T) -> SerializeToPrettyJsonOperation<T>
+/// Create a pretty serialization op from data
+pub fn serialize_to_pretty_json<T>(data: T) -> SerializeToPrettyJsonOp<T>
 where
     T: Serialize + Send + Sync,
 {
-    SerializeToPrettyJsonOperation::new(data)
+    SerializeToPrettyJsonOp::new(data)
 }
 
-/// Create a roundtrip validation operation
-pub fn json_roundtrip<T>(data: T) -> JsonRoundtripOperation<T>
+/// Create a roundtrip validation op
+pub fn json_roundtrip<T>(data: T) -> JsonRoundtripOp<T>
 where
     T: Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
 {
-    JsonRoundtripOperation::new(data)
+    JsonRoundtripOp::new(data)
 }
 
 #[cfg(test)]
@@ -195,10 +195,10 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_deserialize_json_operation() {
+    async fn test_deserialize_json_op() {
         let json_str = r#"{"name":"John","age":30,"active":true}"#;
-        let op = DeserializeJsonOperation::<TestData>::from_str(json_str);
-        let mut context = OperationalContext::new();
+        let op = DeserializeJsonOp::<TestData>::from_str(json_str);
+        let mut context = OpContext::new();
         
         let result = op.perform(&mut context).await;
         assert!(result.is_ok());
@@ -210,15 +210,15 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_serialize_json_operation() {
+    async fn test_serialize_json_op() {
         let data = TestData {
             name: "Alice".to_string(),
             age: 25,
             active: false,
         };
         
-        let op = SerializeToJsonOperation::new(data);
-        let mut context = OperationalContext::new();
+        let op = SerializeToJsonOp::new(data);
+        let mut context = OpContext::new();
         
         let result = op.perform(&mut context).await;
         assert!(result.is_ok());
@@ -230,15 +230,15 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_pretty_json_operation() {
+    async fn test_pretty_json_op() {
         let data = TestData {
             name: "Bob".to_string(),
             age: 35,
             active: true,
         };
         
-        let op = SerializeToPrettyJsonOperation::new(data);
-        let mut context = OperationalContext::new();
+        let op = SerializeToPrettyJsonOp::new(data);
+        let mut context = OpContext::new();
         
         let result = op.perform(&mut context).await;
         assert!(result.is_ok());
@@ -250,15 +250,15 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_json_roundtrip_operation() {
+    async fn test_json_roundtrip_op() {
         let original_data = TestData {
             name: "Charlie".to_string(),
             age: 40,
             active: true,
         };
         
-        let op = JsonRoundtripOperation::new(original_data.clone());
-        let mut context = OperationalContext::new();
+        let op = JsonRoundtripOp::new(original_data.clone());
+        let mut context = OpContext::new();
         
         let result = op.perform(&mut context).await;
         assert!(result.is_ok());
@@ -270,14 +270,14 @@ mod tests {
     #[tokio::test]
     async fn test_deserialize_invalid_json() {
         let invalid_json = r#"{"name":"John","age":invalid}"#;
-        let op = DeserializeJsonOperation::<TestData>::from_str(invalid_json);
-        let mut context = OperationalContext::new();
+        let op = DeserializeJsonOp::<TestData>::from_str(invalid_json);
+        let mut context = OpContext::new();
         
         let result = op.perform(&mut context).await;
         assert!(result.is_err());
         
         match result.unwrap_err() {
-            OperationError::ExecutionFailed(msg) => {
+            OpError::ExecutionFailed(msg) => {
                 assert!(msg.contains("JSON deserialization failed"));
             },
             _ => panic!("Expected ExecutionFailed error"),
@@ -287,7 +287,7 @@ mod tests {
     #[tokio::test]
     async fn test_convenience_functions() {
         let json_str = r#"{"name":"Dave","age":28,"active":false}"#.to_string();
-        let mut context = OperationalContext::new();
+        let mut context = OpContext::new();
         
         // Test deserialize convenience function
         let deserialize_op = deserialize_json::<TestData>(json_str);
@@ -332,8 +332,8 @@ mod tests {
         };
 
         // Test roundtrip with complex structure
-        let op = JsonRoundtripOperation::new(complex_data.clone());
-        let mut context = OperationalContext::new();
+        let op = JsonRoundtripOp::new(complex_data.clone());
+        let mut context = OpContext::new();
         
         let result = op.perform(&mut context).await;
         assert!(result.is_ok());
