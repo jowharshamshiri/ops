@@ -2,25 +2,25 @@ use std::collections::HashMap;
 use serde_json;
 use serde::{Serialize, Deserialize};
 use log::warn;
-use crate::OperationError;
+use crate::OpError;
 
 /// Trait for lazy initialization of context values
 /// Equivalent to Java RequirementFactory<T>
 pub trait RequirementFactory<T>: Send + Sync {
-    fn create(&self) -> Result<T, OperationError>;
+    fn create(&self) -> Result<T, OpError>;
 }
 
 /// Functional implementation of RequirementFactory
 pub struct ClosureFactory<T, F>
 where
-    F: Fn() -> Result<T, OperationError> + Send + Sync,
+    F: Fn() -> Result<T, OpError> + Send + Sync,
 {
     closure: F,
 }
 
 impl<T, F> ClosureFactory<T, F>
 where
-    F: Fn() -> Result<T, OperationError> + Send + Sync,
+    F: Fn() -> Result<T, OpError> + Send + Sync,
 {
     pub fn new(closure: F) -> Self {
         Self { closure }
@@ -30,19 +30,19 @@ where
 impl<T, F> RequirementFactory<T> for ClosureFactory<T, F>
 where
     T: serde::Serialize,
-    F: Fn() -> Result<T, OperationError> + Send + Sync,
+    F: Fn() -> Result<T, OpError> + Send + Sync,
 {
-    fn create(&self) -> Result<T, OperationError> {
+    fn create(&self) -> Result<T, OpError> {
         (self.closure)()
     }
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct OperationalContext {
+pub struct OpContext {
     values: HashMap<String, serde_json::Value>,
 }
 
-impl OperationalContext {
+impl OpContext {
     pub fn new() -> Self {
         Self {
             values: HashMap::new(),
@@ -62,12 +62,12 @@ impl OperationalContext {
         self
     }
 
-    pub fn put<T: serde::Serialize>(&mut self, key: &str, value: T) -> Result<(), OperationError> {
+    pub fn put<T: serde::Serialize>(&mut self, key: &str, value: T) -> Result<(), OpError> {
         if let Ok(json_value) = serde_json::to_value(value) {
             self.values.insert(key.to_string(), json_value);
             Ok(())
         } else {
-            Err(OperationError::Context("Failed to serialize value".to_string()))
+            Err(OpError::Context("Failed to serialize value".to_string()))
         }
     }
 
@@ -79,7 +79,7 @@ impl OperationalContext {
 
     /// Require a value with lazy initialization
     /// Equivalent to Java require(String key, RequirementFactory<T> factory)
-    pub fn require<T>(&mut self, key: &str, factory: Box<dyn RequirementFactory<T>>) -> Result<T, OperationError>
+    pub fn require<T>(&mut self, key: &str, factory: Box<dyn RequirementFactory<T>>) -> Result<T, OpError>
     where
         T: serde::Serialize + serde::de::DeserializeOwned + Clone,
     {
@@ -98,10 +98,10 @@ impl OperationalContext {
     }
 
     /// Convenience method for closure-based requirement factories
-    pub fn require_with<T, F>(&mut self, key: &str, factory_fn: F) -> Result<T, OperationError>
+    pub fn require_with<T, F>(&mut self, key: &str, factory_fn: F) -> Result<T, OpError>
     where
         T: serde::Serialize + serde::de::DeserializeOwned + Clone + 'static,
-        F: Fn() -> Result<T, OperationError> + Send + Sync + 'static,
+        F: Fn() -> Result<T, OpError> + Send + Sync + 'static,
     {
         let factory = Box::new(ClosureFactory::new(factory_fn));
         self.require(key, factory)
@@ -119,6 +119,16 @@ impl OperationalContext {
         self.values.keys()
     }
 
+    /// Access to internal values for persistence ops
+    pub fn values(&self) -> &HashMap<String, serde_json::Value> {
+        &self.values
+    }
+
+    /// Insert method for test compatibility
+    pub fn insert<T: serde::Serialize>(&mut self, key: String, value: T) -> Result<(), OpError> {
+        self.put(&key, value)
+    }
+
     pub fn is_empty(&self) -> bool {
         self.values.is_empty()
     }
@@ -132,10 +142,10 @@ impl HollowOpContext {
     /// Get the singleton HOLLOW instance
     pub const HOLLOW: HollowOpContext = HollowOpContext;
     
-    /// Convert to OperationalContext (warns about hollow usage)
-    pub fn to_context(self) -> OperationalContext {
-        warn!("Using HOLLOW context - operations may not have required values");
-        OperationalContext::new()
+    /// Convert to OpContext (warns about hollow usage)
+    pub fn to_context(self) -> OpContext {
+        warn!("Using HOLLOW context - ops may not have required values");
+        OpContext::new()
     }
     
     /// Create a new hollow context with warning
@@ -147,26 +157,26 @@ impl HollowOpContext {
 
 /// Trait to enable hollow context pattern
 pub trait ContextProvider {
-    fn get_context(&mut self) -> &mut OperationalContext;
+    fn get_context(&mut self) -> &mut OpContext;
     fn is_hollow(&self) -> bool { false }
 }
 
-impl ContextProvider for OperationalContext {
-    fn get_context(&mut self) -> &mut OperationalContext {
+impl ContextProvider for OpContext {
+    fn get_context(&mut self) -> &mut OpContext {
         self
     }
 }
 
 impl ContextProvider for HollowOpContext {
-    fn get_context(&mut self) -> &mut OperationalContext {
+    fn get_context(&mut self) -> &mut OpContext {
         warn!("Hollow context accessed - returning empty context");
         // Note: This is a design limitation - we can't return a mutable reference
-        // from a hollow context. In practice, operations using hollow context
+        // from a hollow context. In practice, ops using hollow context
         // should handle this gracefully.
-        static mut HOLLOW_STORAGE: Option<OperationalContext> = None;
+        static mut HOLLOW_STORAGE: Option<OpContext> = None;
         unsafe {
             if HOLLOW_STORAGE.is_none() {
-                HOLLOW_STORAGE = Some(OperationalContext::new());
+                HOLLOW_STORAGE = Some(OpContext::new());
             }
             HOLLOW_STORAGE.as_mut().unwrap()
         }
@@ -181,7 +191,7 @@ mod tests {
 
     #[test]
     fn test_context_builder() {
-        let ctx = OperationalContext::new()
+        let ctx = OpContext::new()
             .build("key1", "value1")
             .build("key2", 42);
         
@@ -190,8 +200,8 @@ mod tests {
     }
 
     #[test]
-    fn test_context_operations() {
-        let mut ctx = OperationalContext::new();
+    fn test_context_ops() {
+        let mut ctx = OpContext::new();
         
         assert!(ctx.put("test_key", "test_value").is_ok());
         assert_eq!(ctx.get::<String>("test_key"), Some("test_value".to_string()));
@@ -205,7 +215,7 @@ mod tests {
 
     #[test]
     fn test_requirement_factory() {
-        let mut ctx = OperationalContext::new();
+        let mut ctx = OpContext::new();
         
         // Test lazy initialization
         let result = ctx.require_with("expensive_value", || {
@@ -248,7 +258,7 @@ mod tests {
 
     #[test]
     fn test_fluent_interface() {
-        let ctx = OperationalContext::new()
+        let ctx = OpContext::new()
             .with("name", "test")
             .with("age", 25)
             .with("active", true);
@@ -260,10 +270,10 @@ mod tests {
 
     #[test] 
     fn test_requirement_factory_error_handling() {
-        let mut ctx = OperationalContext::new();
+        let mut ctx = OpContext::new();
         
-        let result: Result<String, OperationError> = ctx.require_with("failing_value", || {
-            Err(OperationError::Context("Factory failed".to_string()))
+        let result: Result<String, OpError> = ctx.require_with("failing_value", || {
+            Err(OpError::Context("Factory failed".to_string()))
         });
         
         assert!(result.is_err());

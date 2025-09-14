@@ -1,21 +1,23 @@
-// Operation Metrics and Telemetry - Performance Monitoring Integration
-// Enhanced observability for operations with detailed performance tracking
+// Op Metrics and Telemetry - Performance Monitoring Integration
+// Enhanced observability for ops with detailed performance tracking
 
-use crate::operation::Operation;
-use crate::context::OperationalContext;
-use crate::error::OperationError;
+use crate::op::Op;
+use crate::context::OpContext;
+use crate::error::OpError;
 use async_trait::async_trait;
 use std::time::{Duration, Instant};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use log::{info, warn};
+use log::info;
 use serde::{Serialize, Deserialize};
 
-/// Operation execution metrics
-#[derive(Debug, Clone)]
-pub struct OperationMetrics {
-    pub operation_name: String,
+/// Op execution metrics
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OpMetrics {
+    pub op_name: String,
+    #[serde(skip, default = "std::time::Instant::now")]
     pub start_time: Instant,
+    #[serde(skip)]
     pub end_time: Option<Instant>,
     pub duration: Option<Duration>,
     pub success: bool,
@@ -24,12 +26,17 @@ pub struct OperationMetrics {
     pub context_size: usize,
     pub memory_usage: Option<u64>,
     pub cpu_time: Option<Duration>,
+    // Aggregate statistics fields for audit trail
+    pub average_duration: Option<Duration>,
+    pub min_duration: Option<Duration>,
+    pub max_duration: Option<Duration>,
 }
 
-impl OperationMetrics {
-    pub fn new(operation_name: String, context_size: usize) -> Self {
+
+impl OpMetrics {
+    pub fn new(op_name: String, context_size: usize) -> Self {
         Self {
-            operation_name,
+            op_name,
             start_time: Instant::now(),
             end_time: None,
             duration: None,
@@ -39,6 +46,9 @@ impl OperationMetrics {
             context_size,
             memory_usage: None,
             cpu_time: None,
+            average_duration: None,
+            min_duration: None,
+            max_duration: None,
         }
     }
 
@@ -49,7 +59,7 @@ impl OperationMetrics {
         self.success = true;
     }
 
-    pub fn complete_error(&mut self, error: &OperationError) {
+    pub fn complete_error(&mut self, error: &OpError) {
         let now = Instant::now();
         self.end_time = Some(now);
         self.duration = Some(now.duration_since(self.start_time));
@@ -58,13 +68,13 @@ impl OperationMetrics {
         self.error_message = Some(error.to_string());
     }
 
-    fn error_type_name(&self, error: &OperationError) -> String {
+    fn error_type_name(&self, error: &OpError) -> String {
         match error {
-            OperationError::ExecutionFailed(_) => "ExecutionFailed".to_string(),
-            OperationError::Timeout { .. } => "Timeout".to_string(),
-            OperationError::Context(_) => "Context".to_string(),
-            OperationError::BatchFailed(_) => "BatchFailed".to_string(),
-            OperationError::Other(_) => "Other".to_string(),
+            OpError::ExecutionFailed(_) => "ExecutionFailed".to_string(),
+            OpError::Timeout { .. } => "Timeout".to_string(),
+            OpError::Context(_) => "Context".to_string(),
+            OpError::BatchFailed(_) => "BatchFailed".to_string(),
+            OpError::Other(_) => "Other".to_string(),
         }
     }
 
@@ -83,15 +93,16 @@ impl OperationMetrics {
 
 /// Metrics collection trait
 pub trait MetricsCollector: Send + Sync {
-    fn record_operation(&self, metrics: OperationMetrics);
+    fn record_op(&self, metrics: OpMetrics);
     fn get_summary(&self) -> MetricsSummary;
+    fn get_op_metrics(&self, op_type: &str) -> Option<OpMetrics>;
     fn reset(&self);
 }
 
 /// In-memory metrics collector
 #[derive(Debug)]
 pub struct InMemoryMetricsCollector {
-    metrics: Arc<Mutex<Vec<OperationMetrics>>>,
+    metrics: Arc<Mutex<Vec<OpMetrics>>>,
 }
 
 impl Default for InMemoryMetricsCollector {
@@ -107,17 +118,17 @@ impl InMemoryMetricsCollector {
         }
     }
 
-    pub fn get_metrics(&self) -> Vec<OperationMetrics> {
+    pub fn get_metrics(&self) -> Vec<OpMetrics> {
         self.metrics.lock().unwrap().clone()
     }
 
-    pub fn operation_count(&self) -> usize {
+    pub fn op_count(&self) -> usize {
         self.metrics.lock().unwrap().len()
     }
 }
 
 impl MetricsCollector for InMemoryMetricsCollector {
-    fn record_operation(&self, metrics: OperationMetrics) {
+    fn record_op(&self, metrics: OpMetrics) {
         if let Ok(mut metrics_vec) = self.metrics.lock() {
             metrics_vec.push(metrics);
         }
@@ -131,6 +142,18 @@ impl MetricsCollector for InMemoryMetricsCollector {
         }
     }
 
+    fn get_op_metrics(&self, op_type: &str) -> Option<OpMetrics> {
+        if let Ok(metrics_vec) = self.metrics.lock() {
+            // Find most recent metrics for this op type
+            metrics_vec.iter()
+                .filter(|m| m.op_name == op_type)
+                .last()
+                .cloned()
+        } else {
+            None
+        }
+    }
+
     fn reset(&self) {
         if let Ok(mut metrics_vec) = self.metrics.lock() {
             metrics_vec.clear();
@@ -141,9 +164,9 @@ impl MetricsCollector for InMemoryMetricsCollector {
 /// Aggregated metrics summary
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MetricsSummary {
-    pub total_operations: usize,
-    pub successful_operations: usize,
-    pub failed_operations: usize,
+    pub total_ops: usize,
+    pub successful_ops: usize,
+    pub failed_ops: usize,
     pub success_rate: f64,
     pub average_duration_ms: f64,
     pub min_duration_ms: f64,
@@ -152,16 +175,16 @@ pub struct MetricsSummary {
     pub p95_duration_ms: f64,
     pub p99_duration_ms: f64,
     pub error_breakdown: HashMap<String, usize>,
-    pub slow_operations: usize,
-    pub slowest_operations: Vec<String>,
+    pub slow_ops: usize,
+    pub slowest_ops: Vec<String>,
 }
 
 impl Default for MetricsSummary {
     fn default() -> Self {
         Self {
-            total_operations: 0,
-            successful_operations: 0,
-            failed_operations: 0,
+            total_ops: 0,
+            successful_ops: 0,
+            failed_ops: 0,
             success_rate: 0.0,
             average_duration_ms: 0.0,
             min_duration_ms: 0.0,
@@ -170,22 +193,22 @@ impl Default for MetricsSummary {
             p95_duration_ms: 0.0,
             p99_duration_ms: 0.0,
             error_breakdown: HashMap::new(),
-            slow_operations: 0,
-            slowest_operations: Vec::new(),
+            slow_ops: 0,
+            slowest_ops: Vec::new(),
         }
     }
 }
 
 impl MetricsSummary {
-    pub fn from_metrics(metrics: &[OperationMetrics]) -> Self {
+    pub fn from_metrics(metrics: &[OpMetrics]) -> Self {
         if metrics.is_empty() {
             return Self::default();
         }
 
-        let total_operations = metrics.len();
-        let successful_operations = metrics.iter().filter(|m| m.success).count();
-        let failed_operations = total_operations - successful_operations;
-        let success_rate = (successful_operations as f64 / total_operations as f64) * 100.0;
+        let total_ops = metrics.len();
+        let successful_ops = metrics.iter().filter(|m| m.success).count();
+        let failed_ops = total_ops - successful_ops;
+        let success_rate = (successful_ops as f64 / total_ops as f64) * 100.0;
 
         let durations: Vec<f64> = metrics.iter()
             .filter_map(|m| m.duration_ms())
@@ -211,21 +234,21 @@ impl MetricsSummary {
         }
 
         let slow_threshold = 1000.0; // 1 second
-        let slow_operations = metrics.iter().filter(|m| m.is_slow(slow_threshold)).count();
+        let slow_ops = metrics.iter().filter(|m| m.is_slow(slow_threshold)).count();
 
         let mut slowest_ops: Vec<_> = metrics.iter()
-            .filter_map(|m| m.duration_ms().map(|d| (m.operation_name.clone(), d)))
+            .filter_map(|m| m.duration_ms().map(|d| (m.op_name.clone(), d)))
             .collect();
         slowest_ops.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
-        let slowest_operations = slowest_ops.into_iter()
+        let slowest_ops = slowest_ops.into_iter()
             .take(5)
             .map(|(name, duration)| format!("{} ({:.2}ms)", name, duration))
             .collect();
 
         Self {
-            total_operations,
-            successful_operations,
-            failed_operations,
+            total_ops,
+            successful_ops,
+            failed_ops,
             success_rate,
             average_duration_ms,
             min_duration_ms,
@@ -234,8 +257,8 @@ impl MetricsSummary {
             p95_duration_ms,
             p99_duration_ms,
             error_breakdown,
-            slow_operations,
-            slowest_operations,
+            slow_ops,
+            slowest_ops,
         }
     }
 
@@ -260,14 +283,14 @@ impl MetricsSummary {
     }
 
     pub fn print_summary(&self) {
-        info!("=== Operation Metrics Summary ===");
-        info!("Total Operations: {}", self.total_operations);
+        info!("=== Op Metrics Summary ===");
+        info!("Total Ops: {}", self.total_ops);
         info!("Success Rate: {:.2}%", self.success_rate);
         info!("Average Duration: {:.2}ms", self.average_duration_ms);
         info!("P50 Duration: {:.2}ms", self.p50_duration_ms);
         info!("P95 Duration: {:.2}ms", self.p95_duration_ms);
         info!("P99 Duration: {:.2}ms", self.p99_duration_ms);
-        info!("Slow Operations (>1s): {}", self.slow_operations);
+        info!("Slow Ops (>1s): {}", self.slow_ops);
         
         if !self.error_breakdown.is_empty() {
             info!("Error Breakdown:");
@@ -276,58 +299,58 @@ impl MetricsSummary {
             }
         }
 
-        if !self.slowest_operations.is_empty() {
-            info!("Slowest Operations:");
-            for op in &self.slowest_operations {
+        if !self.slowest_ops.is_empty() {
+            info!("Slowest Ops:");
+            for op in &self.slowest_ops {
                 info!("  {}", op);
             }
         }
     }
 }
 
-/// Metrics-collecting operation wrapper
-pub struct MetricsOperation<T> {
-    operation: Box<dyn Operation<T>>,
+/// Metrics-collecting op wrapper
+pub struct MetricsOp<T> {
+    op: Box<dyn Op<T>>,
     collector: Arc<dyn MetricsCollector>,
-    operation_name: String,
+    op_name: String,
 }
 
-impl<T> MetricsOperation<T>
+impl<T> MetricsOp<T>
 where
     T: Send + 'static,
 {
-    pub fn new(operation: Box<dyn Operation<T>>, collector: Arc<dyn MetricsCollector>) -> Self {
+    pub fn new(op: Box<dyn Op<T>>, collector: Arc<dyn MetricsCollector>) -> Self {
         Self {
-            operation,
+            op,
             collector,
-            operation_name: "MetricsOperation".to_string(),
+            op_name: "MetricsOp".to_string(),
         }
     }
 
     pub fn with_name(mut self, name: String) -> Self {
-        self.operation_name = name;
+        self.op_name = name;
         self
     }
 }
 
 #[async_trait]
-impl<T> Operation<T> for MetricsOperation<T>
+impl<T> Op<T> for MetricsOp<T>
 where
     T: Send + 'static,
 {
-    async fn perform(&self, context: &mut OperationalContext) -> Result<T, OperationError> {
+    async fn perform(&self, context: &mut OpContext) -> Result<T, OpError> {
         let context_size = context.keys().count();
-        let mut metrics = OperationMetrics::new(self.operation_name.clone(), context_size);
+        let mut metrics = OpMetrics::new(self.op_name.clone(), context_size);
 
-        match self.operation.perform(context).await {
+        match self.op.perform(context).await {
             Ok(result) => {
                 metrics.complete_success();
-                self.collector.record_operation(metrics);
+                self.collector.record_op(metrics);
                 Ok(result)
             },
             Err(error) => {
                 metrics.complete_error(&error);
-                self.collector.record_operation(metrics);
+                self.collector.record_op(metrics);
                 Err(error)
             }
         }
@@ -344,21 +367,21 @@ pub fn global_metrics() -> Arc<InMemoryMetricsCollector> {
         .clone()
 }
 
-/// Convenience function to wrap operation with metrics collection
-pub fn with_metrics<T>(operation: Box<dyn Operation<T>>, operation_name: String) -> MetricsOperation<T>
+/// Convenience function to wrap op with metrics collection
+pub fn with_metrics<T>(op: Box<dyn Op<T>>, op_name: String) -> MetricsOp<T>
 where
     T: Send + 'static,
 {
-    MetricsOperation::new(operation, global_metrics()).with_name(operation_name)
+    MetricsOp::new(op, global_metrics()).with_name(op_name)
 }
 
-/// Auto-metrics wrapper that automatically collects metrics for any operation
-pub fn auto_metrics<T>(operation: Box<dyn Operation<T>>) -> MetricsOperation<T>
+/// Auto-metrics wrapper that automatically collects metrics for any op
+pub fn auto_metrics<T>(op: Box<dyn Op<T>>) -> MetricsOp<T>
 where
     T: Send + 'static,
 {
-    let operation_name = crate::ops::get_caller_operation_name();
-    MetricsOperation::new(operation, global_metrics()).with_name(operation_name)
+    let op_name = crate::ops::get_caller_op_name();
+    MetricsOp::new(op, global_metrics()).with_name(op_name)
 }
 
 /// Print global metrics summary
@@ -383,13 +406,13 @@ pub fn get_global_metrics_summary() -> MetricsSummary {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::operation::ClosureOperation;
+    use crate::op::ClosureOp;
     use std::time::Duration;
 
     #[test]
-    fn test_operation_metrics_success() {
-        let mut metrics = OperationMetrics::new("TestOp".to_string(), 5);
-        assert_eq!(metrics.operation_name, "TestOp");
+    fn test_op_metrics_success() {
+        let mut metrics = OpMetrics::new("TestOp".to_string(), 5);
+        assert_eq!(metrics.op_name, "TestOp");
         assert_eq!(metrics.context_size, 5);
         assert!(!metrics.success);
         assert!(metrics.duration.is_none());
@@ -403,9 +426,9 @@ mod tests {
     }
 
     #[test]
-    fn test_operation_metrics_error() {
-        let mut metrics = OperationMetrics::new("FailingOp".to_string(), 3);
-        let error = OperationError::ExecutionFailed("Test error".to_string());
+    fn test_op_metrics_error() {
+        let mut metrics = OpMetrics::new("FailingOp".to_string(), 3);
+        let error = OpError::ExecutionFailed("Test error".to_string());
         
         std::thread::sleep(Duration::from_millis(5));
         metrics.complete_error(&error);
@@ -413,29 +436,29 @@ mod tests {
         assert!(!metrics.success);
         assert!(metrics.duration.is_some());
         assert_eq!(metrics.error_type, Some("ExecutionFailed".to_string()));
-        assert_eq!(metrics.error_message, Some("Operation execution failed: Test error".to_string()));
+        assert_eq!(metrics.error_message, Some("Op execution failed: Test error".to_string()));
     }
 
     #[test]
     fn test_in_memory_metrics_collector() {
         let collector = InMemoryMetricsCollector::new();
-        assert_eq!(collector.operation_count(), 0);
+        assert_eq!(collector.op_count(), 0);
 
-        let mut metrics1 = OperationMetrics::new("Op1".to_string(), 1);
+        let mut metrics1 = OpMetrics::new("Op1".to_string(), 1);
         metrics1.complete_success();
-        collector.record_operation(metrics1);
+        collector.record_op(metrics1);
 
-        let mut metrics2 = OperationMetrics::new("Op2".to_string(), 2);
-        let error = OperationError::Timeout { timeout_ms: 1000 };
+        let mut metrics2 = OpMetrics::new("Op2".to_string(), 2);
+        let error = OpError::Timeout { timeout_ms: 1000 };
         metrics2.complete_error(&error);
-        collector.record_operation(metrics2);
+        collector.record_op(metrics2);
 
-        assert_eq!(collector.operation_count(), 2);
+        assert_eq!(collector.op_count(), 2);
 
         let summary = collector.get_summary();
-        assert_eq!(summary.total_operations, 2);
-        assert_eq!(summary.successful_operations, 1);
-        assert_eq!(summary.failed_operations, 1);
+        assert_eq!(summary.total_ops, 2);
+        assert_eq!(summary.successful_ops, 1);
+        assert_eq!(summary.failed_ops, 1);
         assert_eq!(summary.success_rate, 50.0);
         assert_eq!(summary.error_breakdown.len(), 1);
         assert_eq!(summary.error_breakdown.get("Timeout"), Some(&1));
@@ -453,54 +476,54 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_metrics_operation_success() {
+    async fn test_metrics_op_success() {
         let collector = Arc::new(InMemoryMetricsCollector::new());
-        let operation = Box::new(ClosureOperation::new(|_ctx| {
+        let op = Box::new(ClosureOp::new(|_ctx| {
             Box::pin(async move { 
                 tokio::time::sleep(Duration::from_millis(10)).await;
                 Ok("success".to_string())
             })
         }));
 
-        let metrics_op = MetricsOperation::new(operation, collector.clone())
+        let metrics_op = MetricsOp::new(op, collector.clone())
             .with_name("TestSuccessOp".to_string());
 
-        let mut context = OperationalContext::new();
+        let mut context = OpContext::new();
         let result = metrics_op.perform(&mut context).await;
 
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), "success");
-        assert_eq!(collector.operation_count(), 1);
+        assert_eq!(collector.op_count(), 1);
 
         let metrics = collector.get_metrics();
         let metric = &metrics[0];
-        assert_eq!(metric.operation_name, "TestSuccessOp");
+        assert_eq!(metric.op_name, "TestSuccessOp");
         assert!(metric.success);
         assert!(metric.duration_ms().unwrap() >= 10.0);
     }
 
     #[tokio::test]
-    async fn test_metrics_operation_error() {
+    async fn test_metrics_op_error() {
         let collector = Arc::new(InMemoryMetricsCollector::new());
-        let operation = Box::new(ClosureOperation::new(|_ctx| {
+        let op = Box::new(ClosureOp::new(|_ctx| {
             Box::pin(async move { 
                 tokio::time::sleep(Duration::from_millis(5)).await;
-                Err(OperationError::ExecutionFailed("Test failure".to_string()))
+                Err(OpError::ExecutionFailed("Test failure".to_string()))
             })
         }));
 
-        let metrics_op: MetricsOperation<String> = MetricsOperation::new(operation, collector.clone())
+        let metrics_op: MetricsOp<String> = MetricsOp::new(op, collector.clone())
             .with_name("TestFailureOp".to_string());
 
-        let mut context = OperationalContext::new();
+        let mut context = OpContext::new();
         let result = metrics_op.perform(&mut context).await;
 
         assert!(result.is_err());
-        assert_eq!(collector.operation_count(), 1);
+        assert_eq!(collector.op_count(), 1);
 
         let metrics = collector.get_metrics();
         let metric = &metrics[0];
-        assert_eq!(metric.operation_name, "TestFailureOp");
+        assert_eq!(metric.op_name, "TestFailureOp");
         assert!(!metric.success);
         assert_eq!(metric.error_type, Some("ExecutionFailed".to_string()));
     }
@@ -510,39 +533,39 @@ mod tests {
         reset_global_metrics();
         
         let collector = global_metrics();
-        assert_eq!(collector.operation_count(), 0);
+        assert_eq!(collector.op_count(), 0);
 
-        let mut metrics = OperationMetrics::new("GlobalTest".to_string(), 1);
+        let mut metrics = OpMetrics::new("GlobalTest".to_string(), 1);
         metrics.complete_success();
-        collector.record_operation(metrics);
+        collector.record_op(metrics);
 
-        assert_eq!(collector.operation_count(), 1);
+        assert_eq!(collector.op_count(), 1);
         
         let summary = get_global_metrics_summary();
-        assert_eq!(summary.total_operations, 1);
-        assert_eq!(summary.successful_operations, 1);
+        assert_eq!(summary.total_ops, 1);
+        assert_eq!(summary.successful_ops, 1);
     }
 
     #[tokio::test]
     async fn test_auto_metrics_wrapper() {
         reset_global_metrics();
         
-        let operation = Box::new(ClosureOperation::new(|_ctx| {
+        let op = Box::new(ClosureOp::new(|_ctx| {
             Box::pin(async move { Ok(42) })
         }));
 
-        let metrics_op = auto_metrics(operation);
-        let mut context = OperationalContext::new();
+        let metrics_op = auto_metrics(op);
+        let mut context = OpContext::new();
         
         let result = metrics_op.perform(&mut context).await;
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), 42);
 
         let collector = global_metrics();
-        assert_eq!(collector.operation_count(), 1);
+        assert_eq!(collector.op_count(), 1);
 
         let summary = get_global_metrics_summary();
-        assert_eq!(summary.total_operations, 1);
+        assert_eq!(summary.total_ops, 1);
         assert_eq!(summary.success_rate, 100.0);
     }
 }

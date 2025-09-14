@@ -1,13 +1,13 @@
 // Resource Management - Automatic resource cleanup and management
 // Leverages Rust's ownership system for superior resource handling
 
-use crate::operation::Operation;
-use crate::context::OperationalContext;
-use crate::error::OperationError;
+use crate::op::Op;
+use crate::context::OpContext;
+use crate::error::OpError;
 use async_trait::async_trait;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-use log::{info, warn, error};
+use log::{info, warn};
 
 /// Resource trait for managed resources
 pub trait ManagedResource: Send + Sync {
@@ -56,7 +56,7 @@ where
         }
     }
 
-    pub fn acquire(&self) -> Result<ManagedResourceHandle<R>, OperationError> {
+    pub fn acquire(&self) -> Result<ManagedResourceHandle<R>, OpError> {
         // Try to get existing resource
         if let Ok(mut resources) = self.resources.lock() {
             if let Some(resource) = resources.pop() {
@@ -69,7 +69,7 @@ where
             if *count < self.max_size {
                 let mut new_resource = (self.resource_factory)();
                 if let Err(e) = new_resource.initialize() {
-                    return Err(OperationError::ExecutionFailed(
+                    return Err(OpError::ExecutionFailed(
                         format!("Failed to initialize resource: {}", e)
                     ));
                 }
@@ -80,7 +80,7 @@ where
             }
         }
 
-        Err(OperationError::ExecutionFailed(
+        Err(OpError::ExecutionFailed(
             "Resource pool exhausted".to_string()
         ))
     }
@@ -132,13 +132,13 @@ where
         }
     }
 
-    pub fn get(&self) -> Result<std::sync::MutexGuard<R>, OperationError> {
+    pub fn get(&self) -> Result<std::sync::MutexGuard<R>, OpError> {
         self.resource.lock().map_err(|_| {
-            OperationError::ExecutionFailed("Failed to acquire resource lock".to_string())
+            OpError::ExecutionFailed("Failed to acquire resource lock".to_string())
         })
     }
 
-    pub fn resource_type(&self) -> Result<&'static str, OperationError> {
+    pub fn resource_type(&self) -> Result<&'static str, OpError> {
         Ok(self.get()?.resource_type())
     }
 
@@ -166,33 +166,33 @@ where
     }
 }
 
-/// Resource-managed operation wrapper
-pub struct ResourceManagedOperation<T, R>
+/// Resource-managed op wrapper
+pub struct ResourceManagedOp<T, R>
 where
     R: ManagedResource + 'static,
 {
-    operation: Box<dyn Operation<T>>,
+    op: Box<dyn Op<T>>,
     resource_pool: Arc<ResourcePool<R>>,
-    operation_name: String,
+    op_name: String,
     acquire_timeout: Duration,
 }
 
-impl<T, R> ResourceManagedOperation<T, R>
+impl<T, R> ResourceManagedOp<T, R>
 where
     T: Send + 'static,
     R: ManagedResource + 'static,
 {
-    pub fn new(operation: Box<dyn Operation<T>>, resource_pool: Arc<ResourcePool<R>>) -> Self {
+    pub fn new(op: Box<dyn Op<T>>, resource_pool: Arc<ResourcePool<R>>) -> Self {
         Self {
-            operation,
+            op,
             resource_pool,
-            operation_name: "ResourceManagedOperation".to_string(),
+            op_name: "ResourceManagedOp".to_string(),
             acquire_timeout: Duration::from_secs(30),
         }
     }
 
     pub fn with_name(mut self, name: String) -> Self {
-        self.operation_name = name;
+        self.op_name = name;
         self
     }
 
@@ -201,7 +201,7 @@ where
         self
     }
 
-    async fn acquire_resource_with_timeout(&self) -> Result<ManagedResourceHandle<R>, OperationError> {
+    async fn acquire_resource_with_timeout(&self) -> Result<ManagedResourceHandle<R>, OpError> {
         let start = Instant::now();
         
         loop {
@@ -218,27 +218,27 @@ where
 }
 
 #[async_trait]
-impl<T, R> Operation<T> for ResourceManagedOperation<T, R>
+impl<T, R> Op<T> for ResourceManagedOp<T, R>
 where
     T: Send + 'static,
     R: ManagedResource + 'static,
 {
-    async fn perform(&self, context: &mut OperationalContext) -> Result<T, OperationError> {
-        info!("Acquiring resource for operation '{}'", self.operation_name);
+    async fn perform(&self, context: &mut OpContext) -> Result<T, OpError> {
+        info!("Acquiring resource for op '{}'", self.op_name);
         
         let resource_handle = self.acquire_resource_with_timeout().await?;
         let resource_type = resource_handle.resource_type()?;
         
-        info!("Acquired {} resource for operation '{}'", resource_type, self.operation_name);
+        info!("Acquired {} resource for op '{}'", resource_type, self.op_name);
         
-        // Store resource handle in context for operation use
-        context.put("resource_handle", format!("{}:{}", resource_type, self.operation_name))?;
+        // Store resource handle in context for op use
+        context.put("resource_handle", format!("{}:{}", resource_type, self.op_name))?;
         
-        let result = self.operation.perform(context).await;
+        let result = self.op.perform(context).await;
         
         match &result {
-            Ok(_) => info!("Operation '{}' completed, resource will be returned to pool", self.operation_name),
-            Err(e) => warn!("Operation '{}' failed: {:?}, resource will be returned to pool", self.operation_name, e),
+            Ok(_) => info!("Op '{}' completed, resource will be returned to pool", self.op_name),
+            Err(e) => warn!("Op '{}' failed: {:?}, resource will be returned to pool", self.op_name, e),
         }
         
         // Resource is automatically returned to pool when handle drops
@@ -308,7 +308,7 @@ impl ManagedResource for ConnectionResource {
     }
 }
 
-/// File handle resource for managed file operations
+/// File handle resource for managed file ops
 pub struct FileResource {
     file_path: String,
     opened: bool,
@@ -369,13 +369,13 @@ impl ManagedResource for FileResource {
     }
 }
 
-/// Convenience functions for creating resource-managed operations
+/// Convenience functions for creating resource-managed ops
 
 pub fn with_connection_pool<T>(
-    operation: Box<dyn Operation<T>>, 
+    op: Box<dyn Op<T>>, 
     connection_strings: Vec<String>,
     pool_size: usize
-) -> ResourceManagedOperation<T, ConnectionResource>
+) -> ResourceManagedOp<T, ConnectionResource>
 where
     T: Send + 'static,
 {
@@ -389,15 +389,15 @@ where
         ConnectionResource::new(conn_str, id + 1)
     }));
     
-    ResourceManagedOperation::new(operation, pool)
+    ResourceManagedOp::new(op, pool)
 }
 
 pub fn with_file_pool<T>(
-    operation: Box<dyn Operation<T>>,
+    op: Box<dyn Op<T>>,
     file_paths: Vec<String>,
     read_only: bool,
     pool_size: usize
-) -> ResourceManagedOperation<T, FileResource>
+) -> ResourceManagedOp<T, FileResource>
 where
     T: Send + 'static,
 {
@@ -411,13 +411,13 @@ where
         FileResource::new(file_path, read_only)
     }));
     
-    ResourceManagedOperation::new(operation, pool)
+    ResourceManagedOp::new(op, pool)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::operation::ClosureOperation;
+    use crate::op::ClosureOp;
 
     #[test]
     fn test_connection_resource() {
@@ -509,10 +509,10 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_resource_managed_operation_success() {
-        let operation = Box::new(ClosureOperation::new(|_ctx| {
+    async fn test_resource_managed_op_success() {
+        let op = Box::new(ClosureOp::new(|_ctx| {
             Box::pin(async move {
-                Ok("Operation completed with resource".to_string())
+                Ok("Op completed with resource".to_string())
             })
         }));
 
@@ -520,20 +520,20 @@ mod tests {
             ConnectionResource::new("test://managed".to_string(), 100)
         }));
 
-        let resource_op = ResourceManagedOperation::new(operation, pool.clone())
+        let resource_op = ResourceManagedOp::new(op, pool.clone())
             .with_name("TestResourceOp".to_string());
 
-        let mut context = OperationalContext::new();
+        let mut context = OpContext::new();
         let result = resource_op.perform(&mut context).await;
 
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), "Operation completed with resource");
+        assert_eq!(result.unwrap(), "Op completed with resource");
         assert_eq!(pool.size(), 1); // Resource returned to pool
     }
 
     #[tokio::test]
-    async fn test_resource_managed_operation_timeout() {
-        let operation = Box::new(ClosureOperation::new(|_ctx| {
+    async fn test_resource_managed_op_timeout() {
+        let op = Box::new(ClosureOp::new(|_ctx| {
             Box::pin(async move { Ok("Should not reach here".to_string()) })
         }));
 
@@ -542,16 +542,16 @@ mod tests {
             ConnectionResource::new("test://timeout".to_string(), 1)
         }));
 
-        let resource_op = ResourceManagedOperation::new(operation, pool)
+        let resource_op = ResourceManagedOp::new(op, pool)
             .with_name("TimeoutTest".to_string())
             .with_acquire_timeout(Duration::from_millis(50));
 
-        let mut context = OperationalContext::new();
+        let mut context = OpContext::new();
         let result = resource_op.perform(&mut context).await;
 
         assert!(result.is_err());
         match result.unwrap_err() {
-            OperationError::ExecutionFailed(msg) => {
+            OpError::ExecutionFailed(msg) => {
                 assert!(msg.contains("exhausted"));
             },
             _ => panic!("Expected ExecutionFailed error"),
@@ -560,7 +560,7 @@ mod tests {
 
     #[test]
     fn test_connection_pool_convenience() {
-        let operation = Box::new(ClosureOperation::new(|_ctx| {
+        let op = Box::new(ClosureOp::new(|_ctx| {
             Box::pin(async move { Ok(42) })
         }));
 
@@ -569,16 +569,16 @@ mod tests {
             "postgres://db2".to_string(),
         ];
 
-        let resource_op = with_connection_pool(operation, connections, 2)
+        let resource_op = with_connection_pool(op, connections, 2)
             .with_name("ConnectionTest".to_string());
 
-        // Should create resource-managed operation
-        assert_eq!(resource_op.operation_name, "ConnectionTest");
+        // Should create resource-managed op
+        assert_eq!(resource_op.op_name, "ConnectionTest");
     }
 
     #[test]
     fn test_file_pool_convenience() {
-        let operation = Box::new(ClosureOperation::new(|_ctx| {
+        let op = Box::new(ClosureOp::new(|_ctx| {
             Box::pin(async move { Ok("file content".to_string()) })
         }));
 
@@ -587,9 +587,9 @@ mod tests {
             "/tmp/file2.txt".to_string(),
         ];
 
-        let resource_op = with_file_pool(operation, files, true, 2)
+        let resource_op = with_file_pool(op, files, true, 2)
             .with_name("FileTest".to_string());
 
-        assert_eq!(resource_op.operation_name, "FileTest");
+        assert_eq!(resource_op.op_name, "FileTest");
     }
 }

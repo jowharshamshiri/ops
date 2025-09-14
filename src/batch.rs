@@ -1,19 +1,19 @@
 use async_trait::async_trait;
 use std::sync::Arc;
-use crate::{Operation, OperationalContext, OperationError};
+use crate::{Op, OpContext, OpError};
 
-pub struct BatchOperation<T> {
-    operations: Vec<Arc<dyn Operation<T>>>,
+pub struct BatchOp<T> {
+    ops: Vec<Arc<dyn Op<T>>>,
     continue_on_error: bool,
 }
 
-impl<T> BatchOperation<T>
+impl<T> BatchOp<T>
 where
     T: Send + Sync + 'static,
 {
-    pub fn new(operations: Vec<Arc<dyn Operation<T>>>) -> Self {
+    pub fn new(ops: Vec<Arc<dyn Op<T>>>) -> Self {
         Self {
-            operations,
+            ops,
             continue_on_error: false,
         }
     }
@@ -23,37 +23,37 @@ where
         self
     }
     
-    pub fn add_operation(&mut self, operation: Arc<dyn Operation<T>>) {
-        self.operations.push(operation);
+    pub fn add_op(&mut self, op: Arc<dyn Op<T>>) {
+        self.ops.push(op);
     }
     
     pub fn len(&self) -> usize {
-        self.operations.len()
+        self.ops.len()
     }
     
     pub fn is_empty(&self) -> bool {
-        self.operations.is_empty()
+        self.ops.is_empty()
     }
 }
 
 #[async_trait]
-impl<T> Operation<Vec<T>> for BatchOperation<T>
+impl<T> Op<Vec<T>> for BatchOp<T>
 where
     T: Send + Sync + 'static,
 {
-    async fn perform(&self, context: &mut OperationalContext) -> Result<Vec<T>, OperationError> {
-        let mut results = Vec::with_capacity(self.operations.len());
+    async fn perform(&self, context: &mut OpContext) -> Result<Vec<T>, OpError> {
+        let mut results = Vec::with_capacity(self.ops.len());
         let mut errors = Vec::new();
         
-        for (index, operation) in self.operations.iter().enumerate() {
-            match operation.perform(context).await {
+        for (index, op) in self.ops.iter().enumerate() {
+            match op.perform(context).await {
                 Ok(result) => results.push(result),
                 Err(error) => {
                     if self.continue_on_error {
                         errors.push((index, error));
                     } else {
-                        return Err(OperationError::BatchFailed(
-                            format!("Operation {} failed: {}", index, error)
+                        return Err(OpError::BatchFailed(
+                            format!("Op {} failed: {}", index, error)
                         ));
                     }
                 }
@@ -61,8 +61,8 @@ where
         }
         
         if !errors.is_empty() && !self.continue_on_error {
-            return Err(OperationError::BatchFailed(
-                format!("Batch operation had {} errors", errors.len())
+            return Err(OpError::BatchFailed(
+                format!("Batch op had {} errors", errors.len())
             ));
         }
         
@@ -70,19 +70,19 @@ where
     }
 }
 
-pub struct ParallelBatchOperation<T> {
-    operations: Vec<Arc<dyn Operation<T>>>,
+pub struct ParallelBatchOp<T> {
+    ops: Vec<Arc<dyn Op<T>>>,
     continue_on_error: bool,
     max_concurrent: Option<usize>,
 }
 
-impl<T> ParallelBatchOperation<T>
+impl<T> ParallelBatchOp<T>
 where
     T: Send + Sync + 'static,
 {
-    pub fn new(operations: Vec<Arc<dyn Operation<T>>>) -> Self {
+    pub fn new(ops: Vec<Arc<dyn Op<T>>>) -> Self {
         Self {
-            operations,
+            ops,
             continue_on_error: false,
             max_concurrent: None,
         }
@@ -100,18 +100,18 @@ where
 }
 
 #[async_trait]
-impl<T> Operation<Vec<T>> for ParallelBatchOperation<T>
+impl<T> Op<Vec<T>> for ParallelBatchOp<T>
 where
     T: Send + Sync + 'static,
 {
-    async fn perform(&self, context: &mut OperationalContext) -> Result<Vec<T>, OperationError> {
+    async fn perform(&self, context: &mut OpContext) -> Result<Vec<T>, OpError> {
         use tokio::task::JoinSet;
         
         let mut join_set = JoinSet::new();
         let context_clone = context.clone();
         
-        for (index, operation) in self.operations.iter().enumerate() {
-            let op = Arc::clone(operation);
+        for (index, op) in self.ops.iter().enumerate() {
+            let op = Arc::clone(op);
             let mut ctx = context_clone.clone();
             
             join_set.spawn(async move {
@@ -125,12 +125,12 @@ where
                         match result {
                             Ok((_, Ok(_))) => {},
                             Ok((idx, Err(e))) if !self.continue_on_error => {
-                                return Err(OperationError::BatchFailed(
-                                    format!("Operation {} failed: {}", idx, e)
+                                return Err(OpError::BatchFailed(
+                                    format!("Op {} failed: {}", idx, e)
                                 ));
                             },
                             Err(join_error) => {
-                                return Err(OperationError::BatchFailed(
+                                return Err(OpError::BatchFailed(
                                     format!("Task join error: {}", join_error)
                                 ));
                             },
@@ -141,7 +141,7 @@ where
             }
         }
         
-        let mut results: Vec<Option<T>> = (0..self.operations.len()).map(|_| None).collect();
+        let mut results: Vec<Option<T>> = (0..self.ops.len()).map(|_| None).collect();
         let mut errors = Vec::new();
         
         while let Some(result) = join_set.join_next().await {
@@ -153,13 +153,13 @@ where
                     if self.continue_on_error {
                         errors.push((index, error));
                     } else {
-                        return Err(OperationError::BatchFailed(
-                            format!("Operation {} failed: {}", index, error)
+                        return Err(OpError::BatchFailed(
+                            format!("Op {} failed: {}", index, error)
                         ));
                     }
                 },
                 Err(join_error) => {
-                    return Err(OperationError::BatchFailed(
+                    return Err(OpError::BatchFailed(
                         format!("Task join error: {}", join_error)
                     ));
                 }
@@ -169,7 +169,7 @@ where
         let final_results: Result<Vec<T>, _> = results
             .into_iter()
             .collect::<Option<Vec<T>>>()
-            .ok_or_else(|| OperationError::BatchFailed("Missing results".to_string()));
+            .ok_or_else(|| OpError::BatchFailed("Missing results".to_string()));
             
         final_results
     }
@@ -179,16 +179,16 @@ where
 mod tests {
     use super::*;
     
-    struct TestOperation {
+    struct TestOp {
         value: i32,
         should_fail: bool,
     }
     
     #[async_trait]
-    impl Operation<i32> for TestOperation {
-        async fn perform(&self, _context: &mut OperationalContext) -> Result<i32, OperationError> {
+    impl Op<i32> for TestOp {
+        async fn perform(&self, _context: &mut OpContext) -> Result<i32, OpError> {
             if self.should_fail {
-                Err(OperationError::ExecutionFailed("Test failure".to_string()))
+                Err(OpError::ExecutionFailed("Test failure".to_string()))
             } else {
                 Ok(self.value)
             }
@@ -196,42 +196,42 @@ mod tests {
     }
     
     #[tokio::test]
-    async fn test_batch_operation_success() {
+    async fn test_batch_op_success() {
         let ops = vec![
-            Arc::new(TestOperation { value: 1, should_fail: false }) as Arc<dyn Operation<i32>>,
-            Arc::new(TestOperation { value: 2, should_fail: false }) as Arc<dyn Operation<i32>>,
+            Arc::new(TestOp { value: 1, should_fail: false }) as Arc<dyn Op<i32>>,
+            Arc::new(TestOp { value: 2, should_fail: false }) as Arc<dyn Op<i32>>,
         ];
         
-        let batch = BatchOperation::new(ops);
-        let mut ctx = OperationalContext::new();
+        let batch = BatchOp::new(ops);
+        let mut ctx = OpContext::new();
         
         let results = batch.perform(&mut ctx).await.unwrap();
         assert_eq!(results, vec![1, 2]);
     }
     
     #[tokio::test]
-    async fn test_batch_operation_failure() {
+    async fn test_batch_op_failure() {
         let ops = vec![
-            Arc::new(TestOperation { value: 1, should_fail: false }) as Arc<dyn Operation<i32>>,
-            Arc::new(TestOperation { value: 2, should_fail: true }) as Arc<dyn Operation<i32>>,
+            Arc::new(TestOp { value: 1, should_fail: false }) as Arc<dyn Op<i32>>,
+            Arc::new(TestOp { value: 2, should_fail: true }) as Arc<dyn Op<i32>>,
         ];
         
-        let batch = BatchOperation::new(ops);
-        let mut ctx = OperationalContext::new();
+        let batch = BatchOp::new(ops);
+        let mut ctx = OpContext::new();
         
         let result = batch.perform(&mut ctx).await;
         assert!(result.is_err());
     }
     
     #[tokio::test]
-    async fn test_parallel_batch_operation() {
+    async fn test_parallel_batch_op() {
         let ops = vec![
-            Arc::new(TestOperation { value: 1, should_fail: false }) as Arc<dyn Operation<i32>>,
-            Arc::new(TestOperation { value: 2, should_fail: false }) as Arc<dyn Operation<i32>>,
+            Arc::new(TestOp { value: 1, should_fail: false }) as Arc<dyn Op<i32>>,
+            Arc::new(TestOp { value: 2, should_fail: false }) as Arc<dyn Op<i32>>,
         ];
         
-        let batch = ParallelBatchOperation::new(ops);
-        let mut ctx = OperationalContext::new();
+        let batch = ParallelBatchOp::new(ops);
+        let mut ctx = OpContext::new();
         
         let results = batch.perform(&mut ctx).await.unwrap();
         assert_eq!(results.len(), 2);
