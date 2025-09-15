@@ -29,7 +29,7 @@ op!(use_double_result(doubled_value: i32) -> String {
 
 #[tokio::main]
 async fn main() -> Result<(), OpError> {
-    env_logger::init();
+    tracing_subscriber::fmt::init();
 
     println!("=== Testing Daisy Chain Ops ===\n");
 

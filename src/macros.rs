@@ -34,20 +34,20 @@ macro_rules! op {
             #[async_trait::async_trait]
             impl $crate::op::Op<()> for [<$fn_name:camel>] {
                 async fn perform(&self, context: &mut $crate::context::OpContext) -> std::result::Result<(), $crate::error::OpError> {
-                    log::debug!("Executing {}", stringify!([<$fn_name:camel>]));
+                    tracing::debug!("Executing {}", stringify!([<$fn_name:camel>]));
                     
                     // Use requirement system for input with fallback to "result" for daisy chaining
                     let input_key = stringify!($input_name);
                     let $input_name: $input_type = match context.get::<$input_type>(input_key) {
                         Some(value) => {
-                            log::debug!("Found input '{}' via requirement system", input_key);
+                            tracing::debug!("Found input '{}' via requirement system", input_key);
                             value
                         },
                         None => {
                             // Fallback: try "result" for daisy chaining
                             match context.get::<$input_type>("result") {
                                 Some(value) => {
-                                    log::debug!("Using 'result' for input '{}' via requirement fallback", input_key);
+                                    tracing::debug!("Using 'result' for input '{}' via requirement fallback", input_key);
                                     value
                                 },
                                 None => {
@@ -72,7 +72,7 @@ macro_rules! op {
                                     context.set(op_name.to_string(), json_value.clone());
                                     // Also store as "result" for convenience
                                     context.set("result".to_string(), json_value);
-                                    log::debug!("Successfully stored result for {} under key '{}'", op_name, op_name);
+                                    tracing::debug!("Successfully stored result for {} under key '{}'", op_name, op_name);
                                     Ok(())
                                 },
                                 Err(e) => {
@@ -83,7 +83,7 @@ macro_rules! op {
                             }
                         },
                         Err(e) => {
-                            log::error!("Operation {} failed: {}", stringify!([<$fn_name:camel>]), e);
+                            tracing::error!("Operation {} failed: {}", stringify!([<$fn_name:camel>]), e);
                             Err(e)
                         }
                     }
@@ -112,14 +112,14 @@ macro_rules! op {
             #[async_trait::async_trait]
             impl $crate::op::Op<()> for [<$fn_name:camel>] {
                 async fn perform(&self, context: &mut $crate::context::OpContext) -> std::result::Result<(), $crate::error::OpError> {
-                    log::debug!("Executing {}", stringify!([<$fn_name:camel>]));
+                    tracing::debug!("Executing {}", stringify!([<$fn_name:camel>]));
                     
                     // Use requirement system for all inputs 
                     $(
                         let input_key = stringify!($input_name);
                         let $input_name: $input_type = match context.get::<$input_type>(input_key) {
                             Some(value) => {
-                                log::debug!("Found input '{}' via requirement system", input_key);
+                                tracing::debug!("Found input '{}' via requirement system", input_key);
                                 value
                             },
                             None => {
@@ -142,7 +142,7 @@ macro_rules! op {
                                     context.set(op_name.to_string(), json_value.clone());
                                     // Also store as "result" for convenience
                                     context.set("result".to_string(), json_value);
-                                    log::debug!("Successfully stored result for {} under key '{}'", op_name, op_name);
+                                    tracing::debug!("Successfully stored result for {} under key '{}'", op_name, op_name);
                                     Ok(())
                                 },
                                 Err(e) => {
@@ -153,7 +153,7 @@ macro_rules! op {
                             }
                         },
                         Err(e) => {
-                            log::error!("Operation {} failed: {}", stringify!([<$fn_name:camel>]), e);
+                            tracing::error!("Operation {} failed: {}", stringify!([<$fn_name:camel>]), e);
                             Err(e)
                         }
                     }
@@ -193,10 +193,10 @@ macro_rules! perform {
                 {
                     let op = $op_name::new();
                     if let Err(e) = $crate::op::Op::perform(&op, &mut context).await {
-                        log::error!("Op {} failed: {}", stringify!($op_name), e);
+                        tracing::error!("Op {} failed: {}", stringify!($op_name), e);
                         return Err(e);
                     }
-                    log::debug!("Op {} completed successfully", stringify!($op_name));
+                    tracing::debug!("Op {} completed successfully", stringify!($op_name));
                 }
             )+
             

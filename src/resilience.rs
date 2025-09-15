@@ -7,7 +7,7 @@ use crate::error::OpError;
 use async_trait::async_trait;
 use std::time::{Duration, Instant};
 use std::sync::{Arc, Mutex};
-use log::{warn, info, error};
+use tracing::{warn, info, error};
 
 /// Retry strategy configuration
 #[derive(Debug, Clone)]
@@ -126,13 +126,13 @@ where
         let mut last_error = None;
 
         loop {
-            info!("Attempting op '{}' (attempt {}/{})", 
+            tracing::info!("Attempting op '{}' (attempt {}/{})", 
                 self.op_name, attempt + 1, self.strategy.max_attempts());
 
             match self.op.perform(context).await {
                 Ok(result) => {
                     if attempt > 0 {
-                        info!("Op '{}' succeeded after {} retries", self.op_name, attempt);
+                        tracing::info!("Op '{}' succeeded after {} retries", self.op_name, attempt);
                     }
                     return Ok(result);
                 },
@@ -140,17 +140,17 @@ where
                     last_error = Some(error.clone());
                     
                     if !self.should_retry(&error) {
-                        warn!("Op '{}' failed with non-retryable error: {:?}", self.op_name, error);
+                        tracing::warn!("Op '{}' failed with non-retryable error: {:?}", self.op_name, error);
                         return Err(error);
                     }
 
                     if let Some(delay) = self.strategy.get_delay(attempt) {
-                        warn!("Op '{}' failed on attempt {}, retrying in {:?}: {:?}", 
+                        tracing::warn!("Op '{}' failed on attempt {}, retrying in {:?}: {:?}", 
                             self.op_name, attempt + 1, delay, error);
                         tokio::time::sleep(delay).await;
                         attempt += 1;
                     } else {
-                        error!("Op '{}' failed after {} attempts, giving up: {:?}", 
+                        tracing::error!("Op '{}' failed after {} attempts, giving up: {:?}", 
                             self.op_name, attempt + 1, error);
                         return Err(OpError::ExecutionFailed(
                             format!("Op failed after {} retries. Last error: {:?}", attempt + 1, error)
@@ -243,7 +243,7 @@ where
                 CircuitState::HalfOpen => {
                     state.success_count += 1;
                     if state.success_count >= self.config.success_threshold {
-                        info!("Circuit breaker for '{}' closing after {} successes", 
+                        tracing::info!("Circuit breaker for '{}' closing after {} successes", 
                             self.op_name, state.success_count);
                         state.state = CircuitState::Closed;
                         state.failure_count = 0;
@@ -266,13 +266,13 @@ where
             match state.state {
                 CircuitState::Closed => {
                     if state.failure_count >= self.config.failure_threshold {
-                        warn!("Circuit breaker for '{}' opening after {} failures", 
+                        tracing::warn!("Circuit breaker for '{}' opening after {} failures", 
                             self.op_name, state.failure_count);
                         state.state = CircuitState::Open;
                     }
                 },
                 CircuitState::HalfOpen => {
-                    warn!("Circuit breaker for '{}' reopening after failure in half-open state", 
+                    tracing::warn!("Circuit breaker for '{}' reopening after failure in half-open state", 
                         self.op_name);
                     state.state = CircuitState::Open;
                     state.success_count = 0;
@@ -296,7 +296,7 @@ where
                 CircuitState::Open => {
                     if let Some(last_failure) = state.last_failure_time {
                         if last_failure.elapsed() >= self.config.recovery_timeout {
-                            info!("Circuit breaker for '{}' transitioning to half-open for testing", 
+                            tracing::info!("Circuit breaker for '{}' transitioning to half-open for testing", 
                                 self.op_name);
                             state.state = CircuitState::HalfOpen;
                             state.success_count = 0;
@@ -338,7 +338,7 @@ where
             Err(error) => {
                 let new_state = self.update_state_on_failure();
                 if new_state == CircuitState::Open {
-                    warn!("Circuit breaker for '{}' is now OPEN", self.op_name);
+                    tracing::warn!("Circuit breaker for '{}' is now OPEN", self.op_name);
                 }
                 Err(error)
             }
@@ -400,16 +400,16 @@ where
             Ok(result) => Ok(result),
             Err(error) => {
                 if self.should_fallback(&error) {
-                    warn!("Primary op '{}' failed, attempting fallback: {:?}", 
+                    tracing::warn!("Primary op '{}' failed, attempting fallback: {:?}", 
                         self.op_name, error);
                     
                     match self.fallback.perform(context).await {
                         Ok(result) => {
-                            info!("Fallback op '{}' succeeded", self.op_name);
+                            tracing::info!("Fallback op '{}' succeeded", self.op_name);
                             Ok(result)
                         },
                         Err(fallback_error) => {
-                            error!("Both primary and fallback failed for '{}'. Primary: {:?}, Fallback: {:?}", 
+                            tracing::error!("Both primary and fallback failed for '{}'. Primary: {:?}, Fallback: {:?}", 
                                 self.op_name, error, fallback_error);
                             Err(OpError::ExecutionFailed(
                                 format!("Primary failed: {:?}, Fallback failed: {:?}", error, fallback_error)
@@ -417,7 +417,7 @@ where
                         }
                     }
                 } else {
-                    warn!("Primary op '{}' failed with non-fallback error: {:?}", 
+                    tracing::warn!("Primary op '{}' failed with non-fallback error: {:?}", 
                         self.op_name, error);
                     Err(error)
                 }

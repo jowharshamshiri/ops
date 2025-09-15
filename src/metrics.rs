@@ -8,7 +8,7 @@ use async_trait::async_trait;
 use std::time::{Duration, Instant};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use log::info;
+use tracing::info;
 use serde::{Serialize, Deserialize};
 
 /// Op execution metrics
@@ -283,26 +283,26 @@ impl MetricsSummary {
     }
 
     pub fn print_summary(&self) {
-        info!("=== Op Metrics Summary ===");
-        info!("Total Ops: {}", self.total_ops);
-        info!("Success Rate: {:.2}%", self.success_rate);
-        info!("Average Duration: {:.2}ms", self.average_duration_ms);
-        info!("P50 Duration: {:.2}ms", self.p50_duration_ms);
-        info!("P95 Duration: {:.2}ms", self.p95_duration_ms);
-        info!("P99 Duration: {:.2}ms", self.p99_duration_ms);
-        info!("Slow Ops (>1s): {}", self.slow_ops);
+        tracing::info!("=== Op Metrics Summary ===");
+        tracing::info!("Total Ops: {}", self.total_ops);
+        tracing::info!("Success Rate: {:.2}%", self.success_rate);
+        tracing::info!("Average Duration: {:.2}ms", self.average_duration_ms);
+        tracing::info!("P50 Duration: {:.2}ms", self.p50_duration_ms);
+        tracing::info!("P95 Duration: {:.2}ms", self.p95_duration_ms);
+        tracing::info!("P99 Duration: {:.2}ms", self.p99_duration_ms);
+        tracing::info!("Slow Ops (>1s): {}", self.slow_ops);
         
         if !self.error_breakdown.is_empty() {
-            info!("Error Breakdown:");
+            tracing::info!("Error Breakdown:");
             for (error_type, count) in &self.error_breakdown {
-                info!("  {}: {}", error_type, count);
+                tracing::info!("  {}: {}", error_type, count);
             }
         }
 
         if !self.slowest_ops.is_empty() {
-            info!("Slowest Ops:");
+            tracing::info!("Slowest Ops:");
             for op in &self.slowest_ops {
-                info!("  {}", op);
+                tracing::info!("  {}", op);
             }
         }
     }

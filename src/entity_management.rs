@@ -127,7 +127,7 @@ impl Op<StatefulResult<EntityData>> for CreateEntityOp {
         if let Some(_manager) = &self.persistence_manager {
             // Note: Persistence integration would go here in a real implementation
             // For now, we just log that persistence would happen
-            log::info!("Entity {} would be persisted", self.entity_data.id);
+            tracing::info!("Entity {} would be persisted", self.entity_data.id);
         }
 
         let duration_ms = start_time.elapsed().as_millis() as u64;
@@ -237,7 +237,7 @@ impl Op<StatefulResult<EntityData>> for ReadEntityOp {
         // Try to load from persistence if manager is available
         if let Some(_manager) = &self.persistence_manager {
             // Note: Persistence loading would go here in a real implementation
-            log::info!("Would attempt to load entity {} from persistence", self.entity_id);
+            tracing::info!("Would attempt to load entity {} from persistence", self.entity_id);
         }
 
         Err(OpError::ExecutionFailed(
@@ -359,7 +359,7 @@ impl Op<StatefulResult<EntityData>> for UpdateEntityOp {
         // Persist if manager is available
         if let Some(_manager) = &self.persistence_manager {
             // Note: Persistence update would go here in a real implementation
-            log::info!("Entity {} would be persisted after update", self.entity_id);
+            tracing::info!("Entity {} would be persisted after update", self.entity_id);
         }
 
         let duration_ms = start_time.elapsed().as_millis() as u64;
@@ -491,7 +491,7 @@ impl Op<StatefulResult<EntityData>> for DeleteEntityOp {
         // Remove from persistence if manager is available
         if let Some(_manager) = &self.persistence_manager {
             // Note: Persistence deletion would go here in a real implementation
-            log::info!("Entity {} would be deleted from persistence", self.entity_id);
+            tracing::info!("Entity {} would be deleted from persistence", self.entity_id);
         }
 
         let duration_ms = start_time.elapsed().as_millis() as u64;

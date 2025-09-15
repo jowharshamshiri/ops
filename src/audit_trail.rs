@@ -632,7 +632,7 @@ impl AuditTrailCollector {
             })?;
             
             // Store audit record (would need to add audit storage methods to persistence manager)
-            log::info!("Audit record {} persisted (size: {} bytes)", record.record_id, record_data.len());
+            tracing::info!("Audit record {} persisted (size: {} bytes)", record.record_id, record_data.len());
         }
 
         Ok(())

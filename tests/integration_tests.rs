@@ -22,7 +22,7 @@ struct User {
 #[tokio::test]
 async fn test_complete_ops_java_compatibility() {
     // Initialize logging
-    env_logger::try_init().ok();
+    tracing_subscriber::fmt::try_init().ok();
     
     // Create context with builder pattern (Java OpContext.build equivalent)
     let mut context = OpContext::new()
@@ -76,7 +76,7 @@ async fn test_complete_ops_java_compatibility() {
 
 #[tokio::test]
 async fn test_error_handling_and_wrapper_chains() {
-    env_logger::try_init().ok();
+    tracing_subscriber::fmt::try_init().ok();
     let mut context = OpContext::new();
     
     // Create op that will fail
@@ -104,7 +104,7 @@ async fn test_error_handling_and_wrapper_chains() {
 
 #[tokio::test] 
 async fn test_hollow_context_pattern() {
-    env_logger::try_init().ok();
+    tracing_subscriber::fmt::try_init().ok();
     
     // Test HOLLOW context singleton
     let hollow1 = HollowOpContext::HOLLOW;
@@ -129,7 +129,7 @@ async fn test_hollow_context_pattern() {
 
 #[tokio::test]
 async fn test_parallel_batch_with_wrappers() {
-    env_logger::try_init().ok();
+    tracing_subscriber::fmt::try_init().ok();
     let mut context = OpContext::new();
     
     let users = vec![
@@ -218,7 +218,7 @@ async fn test_comprehensive_context_features() {
 
 #[tokio::test]
 async fn test_json_op_error_handling() {
-    env_logger::try_init().ok();
+    tracing_subscriber::fmt::try_init().ok();
     let mut context = OpContext::new();
     
     // Test invalid JSON deserialization with wrapper chain
@@ -238,7 +238,7 @@ async fn test_json_op_error_handling() {
 
 #[tokio::test]
 async fn test_timeout_wrapper_functionality() {
-    env_logger::try_init().ok();
+    tracing_subscriber::fmt::try_init().ok();
     let mut context = OpContext::new();
     
     // Create slow op

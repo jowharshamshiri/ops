@@ -375,7 +375,7 @@ impl RollbackStrategy for CommandRollbackStrategy {
             let rb_id = rollback_id.clone();
             
             // Log rollback execution
-            log::info!("Executing rollback {} with reverse command: {}", rb_id, cmd);
+            tracing::info!("Executing rollback {} with reverse command: {}", rb_id, cmd);
             
             // In a real implementation, this would execute the reverse command
             // For now, we'll just simulate success
@@ -471,7 +471,7 @@ impl RollbackStrategy for SnapshotRollbackStrategy {
             let rb_id = rollback_id.clone();
             
             // Log snapshot restoration
-            log::info!("Executing rollback {} by restoring snapshot: {}", rb_id, snapshot);
+            tracing::info!("Executing rollback {} by restoring snapshot: {}", rb_id, snapshot);
             
             // In a real implementation, this would restore from the snapshot
             // For now, we'll simulate the restoration
