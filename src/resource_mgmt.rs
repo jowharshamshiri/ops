@@ -7,7 +7,7 @@ use crate::error::OpError;
 use async_trait::async_trait;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-use log::{info, warn};
+use tracing::{info, warn};
 
 /// Resource trait for managed resources
 pub trait ManagedResource: Send + Sync {
@@ -224,12 +224,12 @@ where
     R: ManagedResource + 'static,
 {
     async fn perform(&self, context: &mut OpContext) -> Result<T, OpError> {
-        info!("Acquiring resource for op '{}'", self.op_name);
+        tracing::info!("Acquiring resource for op '{}'", self.op_name);
         
         let resource_handle = self.acquire_resource_with_timeout().await?;
         let resource_type = resource_handle.resource_type()?;
         
-        info!("Acquired {} resource for op '{}'", resource_type, self.op_name);
+        tracing::info!("Acquired {} resource for op '{}'", resource_type, self.op_name);
         
         // Store resource handle in context for op use
         context.put("resource_handle", format!("{}:{}", resource_type, self.op_name))?;
@@ -237,8 +237,8 @@ where
         let result = self.op.perform(context).await;
         
         match &result {
-            Ok(_) => info!("Op '{}' completed, resource will be returned to pool", self.op_name),
-            Err(e) => warn!("Op '{}' failed: {:?}, resource will be returned to pool", self.op_name, e),
+            Ok(_) => tracing::info!("Op '{}' completed, resource will be returned to pool", self.op_name),
+            Err(e) => tracing::warn!("Op '{}' failed: {:?}, resource will be returned to pool", self.op_name, e),
         }
         
         // Resource is automatically returned to pool when handle drops
@@ -285,7 +285,7 @@ impl ConnectionResource {
 
 impl ManagedResource for ConnectionResource {
     fn initialize(&mut self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        info!("Initializing connection {} to {}", self.connection_id, self.connection_string);
+        tracing::info!("Initializing connection {} to {}", self.connection_id, self.connection_string);
         // Simulate connection establishment
         std::thread::sleep(Duration::from_millis(100));
         self.connected = true;
@@ -294,7 +294,7 @@ impl ManagedResource for ConnectionResource {
     }
 
     fn cleanup(&mut self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        info!("Cleaning up connection {}", self.connection_id);
+        tracing::info!("Cleaning up connection {}", self.connection_id);
         self.connected = false;
         Ok(())
     }
@@ -348,14 +348,14 @@ impl FileResource {
 
 impl ManagedResource for FileResource {
     fn initialize(&mut self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        info!("Opening file: {} (read-only: {})", self.file_path, self.read_only);
+        tracing::info!("Opening file: {} (read-only: {})", self.file_path, self.read_only);
         // Simulate file opening
         self.opened = true;
         Ok(())
     }
 
     fn cleanup(&mut self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        info!("Closing file: {}", self.file_path);
+        tracing::info!("Closing file: {}", self.file_path);
         self.opened = false;
         Ok(())
     }

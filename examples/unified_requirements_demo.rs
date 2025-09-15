@@ -34,7 +34,7 @@ op!(increment_counter(base: i32, counter: u32) -> i32 {
 
 #[tokio::main]
 async fn main() -> Result<(), OpError> {
-    env_logger::init();
+    tracing_subscriber::fmt::init();
 
     println!("=== Testing Unified Requirements Syntax ===\n");
 

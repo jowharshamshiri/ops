@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use serde_json;
 use serde::{Serialize, Deserialize};
-use log::warn;
+use tracing::warn;
 use crate::OpError;
 
 /// Trait for lazy initialization of context values

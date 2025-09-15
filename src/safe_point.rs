@@ -427,7 +427,7 @@ impl SafePointManager {
                 // Note: Persistence manager doesn't have delete_state method
                 // In a full implementation, we would need to add this method
                 // For now, we'll just log that deletion would happen
-                log::info!("Would delete persisted safe point: {}", safe_point_id);
+                tracing::info!("Would delete persisted safe point: {}", safe_point_id);
             }
         }
 

@@ -5,7 +5,7 @@ use crate::op::Op;
 use crate::context::OpContext;
 use crate::error::OpError;
 use async_trait::async_trait;
-use log::{info, error};
+use tracing;
 use std::time::Instant;
 
 // ANSI color codes for console output (matches Java CONST class)
@@ -47,8 +47,8 @@ impl<T> LoggingWrapper<T> {
 
     /// Log op start with ANSI colors
     fn log_op_start(&self) {
-        info!(
-            target: self.get_logger_name(),
+        tracing::info!(
+            logger = self.get_logger_name(),
             "{}Starting op: {}{}", 
             YELLOW, 
             self.op_name,
@@ -59,8 +59,8 @@ impl<T> LoggingWrapper<T> {
     /// Log op completion with timing
     fn log_op_success(&self, duration: std::time::Duration) {
         let seconds = duration.as_secs_f64();
-        info!(
-            target: self.get_logger_name(),
+        tracing::info!(
+            logger = self.get_logger_name(),
             "{}Op '{}' completed in {:.3} seconds{}", 
             GREEN,
             self.op_name, 
@@ -72,8 +72,8 @@ impl<T> LoggingWrapper<T> {
     /// Log op failure with full error context
     fn log_op_failure(&self, error: &OpError, duration: std::time::Duration) {
         let seconds = duration.as_secs_f64();
-        error!(
-            target: self.get_logger_name(),
+        tracing::error!(
+            logger = self.get_logger_name(),
             "{}Op '{}' failed after {:.3} seconds: {:?}{}", 
             RED,
             self.op_name,
@@ -133,7 +133,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_logging_wrapper_success() {
-        env_logger::try_init().ok(); // Initialize logger for tests
+        tracing_subscriber::fmt::try_init().ok(); // Initialize tracing for tests
         
         let mut context = OpContext::new();
         
@@ -150,7 +150,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_logging_wrapper_failure() {
-        env_logger::try_init().ok();
+        tracing_subscriber::fmt::try_init().ok();
         
         let mut context = OpContext::new();
         

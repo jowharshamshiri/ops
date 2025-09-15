@@ -363,7 +363,7 @@ impl StatePersistenceManager {
 
         for snapshot_id in to_delete {
             if let Err(e) = self.storage.delete_snapshot(snapshot_id).await {
-                log::warn!("Failed to delete snapshot {}: {}", snapshot_id, e);
+                tracing::warn!("Failed to delete snapshot {}: {}", snapshot_id, e);
             } else {
                 deleted_count += 1;
             }

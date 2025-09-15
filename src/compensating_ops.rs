@@ -322,12 +322,12 @@ impl CompensatingOpGenerator {
             let snapshot = snapshot_data.clone();
             
             Box::pin(async move {
-                log::info!("Executing state restoration rollback {}: {}", rb_id, desc);
+                tracing::info!("Executing state restoration rollback {}: {}", rb_id, desc);
                 
                 // In a real implementation, this would restore state from snapshot
                 for (key, value) in &snapshot {
                     if key.starts_with("state_") {
-                        log::info!("Restoring state: {} = {}", key, value);
+                        tracing::info!("Restoring state: {} = {}", key, value);
                     }
                 }
                 
@@ -352,7 +352,7 @@ impl CompensatingOpGenerator {
         // In a real implementation, this would properly execute the entity op
         let wrapper_op = ClosureOp::new(move |_ctx| {
             Box::pin(async move {
-                log::info!("Entity op wrapper executed");
+                tracing::info!("Entity op wrapper executed");
                 Ok(())
             })
         });
@@ -381,8 +381,8 @@ impl CompensatingOpGenerator {
             let desc = description.clone();
             
             Box::pin(async move {
-                log::info!("Executing compensating op for rollback {}: {}", rb_id, desc);
-                log::info!("Compensating op completed for rollback {}", rb_id);
+                tracing::info!("Executing compensating op for rollback {}: {}", rb_id, desc);
+                tracing::info!("Compensating op completed for rollback {}", rb_id);
                 Ok(())
             })
         });
@@ -403,7 +403,7 @@ impl CompensatingOpGenerator {
             let rb_id = rollback_id.clone();
             
             Box::pin(async move {
-                log::info!("No compensation needed for rollback {}", rb_id);
+                tracing::info!("No compensation needed for rollback {}", rb_id);
                 Ok(())
             })
         });
@@ -482,7 +482,7 @@ where
             }
             Err(error) => {
                 // Op failed - no compensation needed
-                log::warn!("Op failed, no compensation needed: {}", error);
+                tracing::warn!("Op failed, no compensation needed: {}", error);
                 Err(error)
             }
         }
@@ -832,7 +832,7 @@ mod tests {
             let op = ClosureOp::new(move |_ctx| {
                 let rb_id = rollback_id.clone();
                 Box::pin(async move {
-                    log::info!("Custom compensation factory executed for rollback {}", rb_id);
+                    tracing::info!("Custom compensation factory executed for rollback {}", rb_id);
                     Ok(())
                 })
             });

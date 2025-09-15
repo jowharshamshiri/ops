@@ -6,7 +6,7 @@ use crate::context::OpContext;
 use crate::error::OpError;
 use async_trait::async_trait;
 use std::time::{Duration, Instant};
-use log::{warn, info};
+use tracing::{warn, info};
 
 pub struct TimeBoundWrapper<T> {
     wrapped_op: Box<dyn Op<T>>,
@@ -223,7 +223,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_logged_timeout_wrapper() {
-        env_logger::try_init().ok();
+        tracing_subscriber::fmt::try_init().ok();
         let mut context = OpContext::new();
         
         let op = Box::new(ClosureOp::new(|_ctx| {

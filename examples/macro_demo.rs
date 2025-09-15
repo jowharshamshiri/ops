@@ -25,7 +25,7 @@ op!(add_operation(a: i32, b: i32) -> i32 {
 
 #[tokio::main]
 async fn main() -> Result<(), OpError> {
-    env_logger::init();
+    tracing_subscriber::fmt::init();
     let mut context = OpContext::new();
 
     println!("=== Testing op! macro with OpContext ===");
