@@ -21,6 +21,7 @@ pub mod hierarchical_ops;
 pub mod entity_management;
 pub mod compensating_ops;
 pub mod audit_trail;
+pub mod macros;
 
 pub use context::{OpContext, HollowOpContext, RequirementFactory, ClosureFactory, ContextProvider};
 pub use error::OpError;
@@ -29,6 +30,7 @@ pub use batch::BatchOp;
 pub use wrappers::logging::LoggingWrapper;
 pub use wrappers::timeout::TimeBoundWrapper;
 pub use ops::{perform, get_caller_op_name, wrap_nested_op_exception};
+
 pub use json_ops::{
     DeserializeJsonOp, SerializeToJsonOp, SerializeToPrettyJsonOp, 
     JsonRoundtripOp, deserialize_json, serialize_to_json, serialize_to_pretty_json, json_roundtrip
@@ -100,3 +102,6 @@ pub use hierarchical_ops::{
     HierarchyId, DependencyType, HierarchyNode, HierarchyStatus, OpHierarchy,
     HierarchyStatistics, HierarchicalOpManager, ExecutionPlan
 };
+
+// Re-export the macros
+pub use macros::*;
