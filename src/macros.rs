@@ -36,38 +36,19 @@ macro_rules! op {
                 async fn perform(&self, context: &mut $crate::context::OpContext) -> std::result::Result<(), $crate::error::OpError> {
                     log::debug!("Executing {}", stringify!([<$fn_name:camel>]));
                     
-                    // Extract input from context with type validation
-                    // First try the named parameter, then try "result" for daisy chaining
+                    // Use requirement system for input with fallback to "result" for daisy chaining
                     let input_key = stringify!($input_name);
-                    let $input_name: $input_type = match context.get_raw(input_key) {
+                    let $input_name: $input_type = match context.get::<$input_type>(input_key) {
                         Some(value) => {
-                            // Try to deserialize from serde_json::Value to the expected type 
-                            match serde_json::from_value(value.clone()) {
-                                Ok(typed_value) => typed_value,
-                                Err(e) => {
-                                    return Err($crate::error::OpError::ExecutionFailed(
-                                        format!("Invalid type for input '{}': expected {}, error: {}", 
-                                            input_key, stringify!($input_type), e)
-                                    ));
-                                }
-                            }
+                            log::debug!("Found input '{}' via requirement system", input_key);
+                            value
                         },
                         None => {
-                            // Try "result" for daisy chaining (most recent op result)
-                            match context.get_raw("result") {
+                            // Fallback: try "result" for daisy chaining
+                            match context.get::<$input_type>("result") {
                                 Some(value) => {
-                                    match serde_json::from_value(value.clone()) {
-                                        Ok(typed_value) => {
-                                            log::debug!("Using 'result' for input '{}'", input_key);
-                                            typed_value
-                                        },
-                                        Err(e) => {
-                                            return Err($crate::error::OpError::ExecutionFailed(
-                                                format!("Invalid type for input '{}' from result: expected {}, error: {}", 
-                                                    input_key, stringify!($input_type), e)
-                                            ));
-                                        }
-                                    }
+                                    log::debug!("Using 'result' for input '{}' via requirement fallback", input_key);
+                                    value
                                 },
                                 None => {
                                     return Err($crate::error::OpError::ExecutionFailed(
@@ -133,20 +114,13 @@ macro_rules! op {
                 async fn perform(&self, context: &mut $crate::context::OpContext) -> std::result::Result<(), $crate::error::OpError> {
                     log::debug!("Executing {}", stringify!([<$fn_name:camel>]));
                     
-                    // Extract all inputs from context with type validation
+                    // Use requirement system for all inputs 
                     $(
                         let input_key = stringify!($input_name);
-                        let $input_name: $input_type = match context.get_raw(input_key) {
+                        let $input_name: $input_type = match context.get::<$input_type>(input_key) {
                             Some(value) => {
-                                match serde_json::from_value(value.clone()) {
-                                    Ok(typed_value) => typed_value,
-                                    Err(e) => {
-                                        return Err($crate::error::OpError::ExecutionFailed(
-                                            format!("Invalid type for input '{}': expected {}, error: {}", 
-                                                input_key, stringify!($input_type), e)
-                                        ));
-                                    }
-                                }
+                                log::debug!("Found input '{}' via requirement system", input_key);
+                                value
                             },
                             None => {
                                 return Err($crate::error::OpError::ExecutionFailed(
@@ -189,31 +163,29 @@ macro_rules! op {
     };
 }
 
-/// Macro to run a daisy chain of ops with simple syntax
+/// Macro to run a daisy chain of ops with unified requirement syntax
 /// 
-/// Usage:
+/// Supports mixed static values and factory functions:
 /// ```rust
-/// let context = run_ops!(
-///     [("name", json!("World")), ("x", json!(5))],
+/// let context = perform!(
+///     [("x", 5),                           // Static value
+///      ("database", || connect_to_db()),   // Factory function  
+///      ("config", || load_config())],      // Factory function
 ///     HelloOperation,
-///     MathOperation,
+///     MathOperation, 
 ///     ComplexOperation
 /// )?;
 /// ```
-/// 
-/// This will:
-/// 1. Put all inputs into a fresh OpContext
-/// 2. Run each op in sequence
-/// 3. Return the final OpContext with all results
 #[macro_export]
-macro_rules! run_ops {
-    ([$(($input_key:expr, $input_value:expr)),* $(,)?], $($op_name:ident),+ $(,)?) => {{
+macro_rules! perform {
+    // Parse the input list with helper to distinguish types
+    ([$($input:tt),* $(,)?], $($op_name:ident),+ $(,)?) => {{
         async {
             let mut context = $crate::context::OpContext::new();
             
-            // Set all inputs in context
+            // Set up all inputs using helper macro
             $(
-                context.set($input_key.to_string(), $input_value);
+                $crate::_setup_input!(context, $input)?;
             )*
             
             // Run each op in sequence
@@ -233,12 +205,34 @@ macro_rules! run_ops {
     }};
 }
 
+/// Helper macro to set up different types of inputs
+#[macro_export]
+macro_rules! _setup_input {
+    // Factory function: ("key", || expr)
+    ($context:expr, ($key:expr, || $factory:expr)) => {{
+        let factory = $crate::context::ClosureFactory::new(|| $factory);
+        $context.require($key, Box::new(factory))
+    }};
+    
+    // Factory function with move: ("key", move || expr)  
+    ($context:expr, ($key:expr, move || $factory:expr)) => {{
+        let factory = $crate::context::ClosureFactory::new(move || $factory);
+        $context.require($key, Box::new(factory))
+    }};
+    
+    // Static value: ("key", value)
+    ($context:expr, ($key:expr, $value:expr)) => {{
+        $context.put($key, $value)
+    }};
+}
+
+
 /// Simplified macro for running ops and getting the final result
 /// 
 /// Usage:
 /// ```rust
 /// let result: String = get_result!(
-///     run_ops!(
+///     perform!(
 ///         [("name", json!("World"))],
 ///         HelloOperation
 ///     ).await?
@@ -264,9 +258,9 @@ macro_rules! get_result {
 /// ```
 #[macro_export]  
 macro_rules! execute_ops {
-    ([$(($input_key:expr, $input_value:expr)),* $(,)?], $($op_name:ident),+ $(,)?) => {{
+    ([$($input:tt),* $(,)?], $($op_name:ident),+ $(,)?) => {{
         async {
-            let context = $crate::run_ops!([$(($input_key, $input_value)),*], $($op_name),+).await?;
+            let context = $crate::perform!([$($input),*], $($op_name),+).await?;
             Ok::<Option<serde_json::Value>, $crate::error::OpError>(
                 context.get_raw("result").cloned()
             )
