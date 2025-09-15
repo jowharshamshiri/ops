@@ -7,6 +7,8 @@ license = "MIT"
 keywords = ["ops", "async", "execution", "framework"]
 categories = ["development-tools"]
 
+
+
 [dependencies]
 tokio = { version = "1.0", features = ["full"] }
 log = "0.4"
@@ -16,6 +18,8 @@ thiserror = "1.0"
 async-trait = "0.1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+paste = "1.0"
+anyhow = "1.0"
 
 [dev-dependencies]
 tokio-test = "0.4"

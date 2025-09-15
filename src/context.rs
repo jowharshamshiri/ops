@@ -132,6 +132,16 @@ impl OpContext {
     pub fn is_empty(&self) -> bool {
         self.values.is_empty()
     }
+
+    /// Get raw JSON value without deserialization
+    pub fn get_raw(&self, key: &str) -> Option<&serde_json::Value> {
+        self.values.get(key)
+    }
+
+    /// Set raw JSON value directly  
+    pub fn set(&mut self, key: String, value: serde_json::Value) {
+        self.values.insert(key, value);
+    }
 }
 
 /// HOLLOW context pattern - singleton no-op context for testing
