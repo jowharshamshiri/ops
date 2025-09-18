@@ -284,6 +284,78 @@ macro_rules! op {
         }
     };
 
+    // Multiple parameters with ctx: &mut OpContext as first parameter
+    ($fn_name:ident(ctx: &mut OpContext, $($input_name:ident: $input_type:ty),+ $(,)?) -> $output_type:ty $body:block) => {
+        paste::paste! {
+            pub struct [<$fn_name:camel>];
+            
+            impl [<$fn_name:camel>] {
+                pub fn new() -> Self {
+                    Self
+                }
+            }
+            
+            impl Default for [<$fn_name:camel>] {
+                fn default() -> Self {
+                    Self::new()
+                }
+            }
+            
+            #[async_trait::async_trait]
+            impl $crate::op::Op<()> for [<$fn_name:camel>] {
+                async fn perform(&self, context: &mut $crate::context::OpContext) -> std::result::Result<(), $crate::error::OpError> {
+                    tracing::debug!("Executing {}", stringify!([<$fn_name:camel>]));
+                    
+                    // Extract regular parameters first
+                    $(
+                        let input_key = stringify!($input_name);
+                        let $input_name: $input_type = match context.get::<$input_type>(input_key) {
+                            Some(value) => {
+                                tracing::debug!("Found input '{}' via requirement system", input_key);
+                                value
+                            },
+                            None => {
+                                return Err($crate::error::OpError::ExecutionFailed(
+                                    format!("Missing required input: '{}'", input_key)
+                                ));
+                            }
+                        };
+                    )+
+                    
+                    // Execute the operation body with ctx available
+                    let result: std::result::Result<$output_type, $crate::error::OpError> = {
+                        let ctx = &mut *context;
+                        $body
+                    };
+                    
+                    // Store result in context under the op name
+                    match result {
+                        Ok(output) => {
+                            match serde_json::to_value(&output) {
+                                Ok(json_value) => {
+                                    let op_name = stringify!([<$fn_name:camel>]);
+                                    context.set(op_name.to_string(), json_value.clone());
+                                    context.set("result".to_string(), json_value);
+                                    tracing::debug!("Successfully stored result for {} under key '{}'", op_name, op_name);
+                                    Ok(())
+                                },
+                                Err(e) => {
+                                    Err($crate::error::OpError::ExecutionFailed(
+                                        format!("Failed to serialize output: {}", e)
+                                    ))
+                                }
+                            }
+                        },
+                        Err(e) => {
+                            tracing::error!("Operation {} failed: {}", stringify!([<$fn_name:camel>]), e);
+                            Err(e)
+                        }
+                    }
+                }
+            }
+        }
+    };
+
     // Multiple parameters with ctx: mut OpContext as first parameter
     ($fn_name:ident(ctx: mut OpContext, $($input_name:ident: $input_type:ty),+ $(,)?) -> $output_type:ty $body:block) => {
         paste::paste! {
@@ -488,6 +560,11 @@ macro_rules! _op_param_extract {
     // Special case: ctx parameter with explicit mut gets passed directly as mutable reference
     ($context_var:ident, ctx: mut OpContext) => {
         let mut ctx = $context_var;
+    };
+    
+    // Special case: ctx parameter as mutable reference
+    ($context_var:ident, ctx: &mut OpContext) => {
+        let ctx = &mut $context_var;
     };
     
     // Regular parameter extraction from context
