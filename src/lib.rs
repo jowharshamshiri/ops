@@ -22,6 +22,7 @@ pub mod entity_management;
 pub mod compensating_ops;
 pub mod audit_trail;
 pub mod macros;
+pub mod loop_op;
 
 pub use context::{OpContext, HollowOpContext, RequirementFactory, ClosureFactory, ContextProvider};
 pub use error::OpError;
@@ -92,6 +93,7 @@ pub use audit_trail::{
     AuditStatistics, VisualizationExporter, AuditableOp, with_audit_trail,
     set_global_audit_collector, get_global_audit_collector
 };
+pub use loop_op::LoopOp;
 pub use safe_point::{
     SafePointId, SafePointStatus, SafePointMetadata, SafePointSnapshot, SafePointOptions,
     SafePointManager, SafePointRestoreOp

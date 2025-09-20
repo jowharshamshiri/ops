@@ -810,7 +810,7 @@ mod macro_tests {
             let ctx = &mut *context;
 
             // Extract file_path parameter using ergonomic macro
-            let file_path: String = ctx_require!(ctx, file_path);
+            let file_path: String = ctx_require!(ctx, file_path)?;
 
             // Track thumbnails generated using ergonomic macro
             let thumbnails_generated = 1;
@@ -867,7 +867,7 @@ mod macro_tests {
         assert_eq!(retrieved_file_path, Some("document.pdf".to_string()));
 
         // Test ctx_require! macro
-        let required_file_path: String = ctx_require!(ctx, file_path);
+        let required_file_path: String = ctx_require!(ctx, file_path)?;
         assert_eq!(required_file_path, "document.pdf");
 
         // Test ctx_result! macro
