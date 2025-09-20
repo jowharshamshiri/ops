@@ -1,4 +1,4 @@
-use ops::{op, perform, execute_ops, OpError};
+use ops::{OpError, OpResult, execute_ops, op, perform};
 use serde_json::json;
 
 // Define some ops that can work in a daisy chain
@@ -28,7 +28,7 @@ op!(use_double_result(doubled_value: i32) -> String {
 });
 
 #[tokio::main]
-async fn main() -> Result<(), OpError> {
+async fn main() -> OpResult<()> {
     tracing_subscriber::fmt::init();
 
     println!("=== Testing Daisy Chain Ops ===\n");

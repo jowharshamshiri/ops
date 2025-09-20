@@ -439,6 +439,8 @@ where
 
 #[cfg(test)]
 mod tests {
+    use crate::OpResult;
+
     use super::*;
 
     #[test]
@@ -496,7 +498,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_basic_state_machine() -> Result<(), OpError> {
+    async fn test_basic_state_machine() -> OpResult<()> {
         let mut sm = StateMachine::<String>::new("test-machine".to_string());
 
         // Add states
@@ -543,7 +545,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_state_machine_with_guards_and_actions() -> Result<(), OpError> {
+    async fn test_state_machine_with_guards_and_actions() -> OpResult<()> {
         let mut sm = StateMachine::<String>::new("guarded-machine".to_string());
 
         // Add states
@@ -595,7 +597,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_state_machine_invalid_transitions() -> Result<(), OpError> {
+    async fn test_state_machine_invalid_transitions() -> OpResult<()> {
         let mut sm = StateMachine::<()>::new("test-machine".to_string());
 
         sm.add_state(State::new("initial".to_string(), "Initial".to_string()).initial())
@@ -618,7 +620,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_available_transitions() -> Result<(), OpError> {
+    async fn test_available_transitions() -> OpResult<()> {
         let mut sm = StateMachine::<()>::new("test-machine".to_string());
 
         sm.add_state(State::new("initial".to_string(), "Initial".to_string()).initial())

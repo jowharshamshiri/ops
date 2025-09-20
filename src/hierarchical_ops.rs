@@ -1,7 +1,7 @@
 // Hierarchical Op Framework
 // Parent-child op relationships with dependency management
 
-use crate::OpError;
+use crate::{OpError, OpResult};
 use crate::op_state::{OpInstanceId, OpStateTracker, Priority};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -207,7 +207,7 @@ impl OpHierarchy {
     }
 
     /// Add op node to hierarchy
-    pub fn add_node(&mut self, mut node: HierarchyNode) -> Result<(), OpError> {
+    pub fn add_node(&mut self, mut node: HierarchyNode) -> OpResult<()> {
         let op_id = node.op_id.clone();
 
         // If no parent, it's a root
@@ -283,7 +283,7 @@ impl OpHierarchy {
         dependent_id: &OpInstanceId,
         dependency_id: &OpInstanceId,
         dependency_type: DependencyType,
-    ) -> Result<(), OpError> {
+    ) -> OpResult<()> {
         // Verify both ops exist
         if !self.nodes.contains_key(dependent_id) {
             return Err(OpError::ExecutionFailed(
@@ -473,7 +473,7 @@ impl OpHierarchy {
         visited: &mut HashSet<OpInstanceId>,
         temp_visited: &mut HashSet<OpInstanceId>,
         result: &mut Vec<OpInstanceId>,
-    ) -> Result<(), OpError> {
+    ) -> OpResult<()> {
         if temp_visited.contains(node_id) {
             return Err(OpError::ExecutionFailed(
                 "Circular dependency detected in hierarchy".to_string()
@@ -608,7 +608,7 @@ impl HierarchicalOpManager {
         hierarchy_id: &HierarchyId,
         op_id: OpInstanceId,
         parent_id: Option<OpInstanceId>,
-    ) -> Result<(), OpError> {
+    ) -> OpResult<()> {
         let mut hierarchies = self.hierarchies.write().unwrap();
         let hierarchy = hierarchies.get_mut(hierarchy_id)
             .ok_or_else(|| OpError::ExecutionFailed(
@@ -630,7 +630,7 @@ impl HierarchicalOpManager {
         dependent_id: &OpInstanceId,
         dependency_id: &OpInstanceId,
         dependency_type: DependencyType,
-    ) -> Result<(), OpError> {
+    ) -> OpResult<()> {
         let mut hierarchies = self.hierarchies.write().unwrap();
         let hierarchy = hierarchies.get_mut(hierarchy_id)
             .ok_or_else(|| OpError::ExecutionFailed(

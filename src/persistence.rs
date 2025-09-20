@@ -1,7 +1,7 @@
 // State Persistence Layer
 // Durable storage for op and infrastructure states
 
-use crate::{OpContext, OpError, stateful::EntityMetadata, state_machine::{State, StateId, TransitionId}};
+use crate::{OpContext, OpError, OpResult, state_machine::{State, StateId, TransitionId}, stateful::EntityMetadata};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -72,7 +72,7 @@ impl TransitionRecord {
 #[async_trait]
 pub trait StateStorage: Send + Sync {
     /// Save state snapshot to persistent storage
-    async fn save_snapshot(&self, snapshot: &StateSnapshot) -> Result<(), OpError>;
+    async fn save_snapshot(&self, snapshot: &StateSnapshot) -> OpResult<()>;
     
     /// Load state snapshot by ID
     async fn load_snapshot(&self, id: &PersistenceId) -> Result<StateSnapshot, OpError>;
@@ -81,7 +81,7 @@ pub trait StateStorage: Send + Sync {
     async fn list_snapshots(&self, entity_id: &str) -> Result<Vec<PersistenceId>, OpError>;
     
     /// Delete a state snapshot
-    async fn delete_snapshot(&self, id: &PersistenceId) -> Result<(), OpError>;
+    async fn delete_snapshot(&self, id: &PersistenceId) -> OpResult<()>;
     
     /// Find latest snapshot for an entity
     async fn find_latest_snapshot(&self, entity_id: &str) -> Result<Option<StateSnapshot>, OpError>;
@@ -105,7 +105,7 @@ impl FileSystemStateStorage {
     }
 
     /// Initialize storage directory and index
-    pub async fn initialize(&self) -> Result<(), OpError> {
+    pub async fn initialize(&self) -> OpResult<()> {
         // Create base directory if it doesn't exist
         fs::create_dir_all(&self.base_path)
             .await
@@ -120,7 +120,7 @@ impl FileSystemStateStorage {
     }
 
     /// Rebuild the in-memory index from existing files
-    async fn rebuild_index(&self) -> Result<(), OpError> {
+    async fn rebuild_index(&self) -> OpResult<()> {
         let mut index = self.index.write().unwrap();
         index.clear();
 
@@ -152,7 +152,7 @@ impl FileSystemStateStorage {
 
 #[async_trait]
 impl StateStorage for FileSystemStateStorage {
-    async fn save_snapshot(&self, snapshot: &StateSnapshot) -> Result<(), OpError> {
+    async fn save_snapshot(&self, snapshot: &StateSnapshot) -> OpResult<()> {
         let path = self.snapshot_path(&snapshot.id);
         
         // Serialize snapshot to JSON
@@ -226,7 +226,7 @@ impl StateStorage for FileSystemStateStorage {
         Ok(matching_snapshots)
     }
 
-    async fn delete_snapshot(&self, id: &PersistenceId) -> Result<(), OpError> {
+    async fn delete_snapshot(&self, id: &PersistenceId) -> OpResult<()> {
         let path = self.snapshot_path(id);
         
         // Remove file
@@ -313,7 +313,7 @@ impl StatePersistenceManager {
     }
 
     /// Persist a state snapshot
-    pub async fn persist_snapshot(&self, snapshot: &StateSnapshot) -> Result<(), OpError> {
+    pub async fn persist_snapshot(&self, snapshot: &StateSnapshot) -> OpResult<()> {
         self.storage.save_snapshot(snapshot).await
     }
 

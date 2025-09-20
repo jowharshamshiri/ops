@@ -1,7 +1,7 @@
 // JSON op examples - equivalent to Java op/ directory
 // Implements DeserializeJsonOp and SerializeToJsonOp with serde_json
 
-use crate::op::Op;
+use crate::{OpResult, op::Op};
 use crate::context::OpContext;
 use crate::error::OpError;
 use async_trait::async_trait;
@@ -70,7 +70,7 @@ impl<T> Op<String> for SerializeToJsonOp<T>
 where
     T: Serialize + Send + Sync,
 {
-    async fn perform(&self, _context: &mut OpContext) -> Result<String, OpError> {
+    async fn perform(&self, _context: &mut OpContext) -> OpResult<String> {
         serde_json::to_string(&self.data)
             .map_err(|e| OpError::ExecutionFailed(
                 format!("JSON serialization failed: {}", e)
@@ -101,7 +101,7 @@ impl<T> Op<String> for SerializeToPrettyJsonOp<T>
 where
     T: Serialize + Send + Sync,
 {
-    async fn perform(&self, _context: &mut OpContext) -> Result<String, OpError> {
+    async fn perform(&self, _context: &mut OpContext) -> OpResult<String> {
         serde_json::to_string_pretty(&self.data)
             .map_err(|e| OpError::ExecutionFailed(
                 format!("Pretty JSON serialization failed: {}", e)

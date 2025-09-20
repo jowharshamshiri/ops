@@ -1,7 +1,7 @@
 // Emergency Rollback Ops
 // Fast-path emergency rollback for critical failures
 
-use crate::{Op, OpContext, OpError};
+use crate::{Op, OpContext, OpError, OpResult};
 use crate::rollback::{RollbackStrategy, RollbackPriority, RollbackId};
 use crate::safe_point::{SafePointManager, SafePointId};
 use crate::op_state::{OpStateTracker, OpInstanceId};
@@ -354,7 +354,7 @@ impl EmergencyRollbackManager {
     }
 
     /// Execute emergency rollback
-    pub async fn execute_emergency_rollback(&self, emergency_id: &RollbackId) -> Result<(), OpError> {
+    pub async fn execute_emergency_rollback(&self, emergency_id: &RollbackId) -> OpResult<()> {
         // Get emergency record
         let mut record = {
             let mut records = self.emergency_records.write().unwrap();
@@ -457,7 +457,7 @@ impl EmergencyRollbackManager {
     }
 
     /// Execute rollback using safe point
-    async fn execute_rollback(&self, safe_point_id: &SafePointId, _strategy_name: &str) -> Result<(), OpError> {
+    async fn execute_rollback(&self, safe_point_id: &SafePointId, _strategy_name: &str) -> OpResult<()> {
         // Get safe point snapshot
         let snapshot = self.safe_point_manager.get_safe_point(safe_point_id)
             .ok_or_else(|| OpError::ExecutionFailed(
@@ -482,7 +482,7 @@ impl EmergencyRollbackManager {
     }
 
     /// Execute direct rollback without safe point
-    async fn execute_direct_rollback(&self, affected_ops: &[OpInstanceId], strategy_name: &str) -> Result<(), OpError> {
+    async fn execute_direct_rollback(&self, affected_ops: &[OpInstanceId], strategy_name: &str) -> OpResult<()> {
         // Get strategy
         let strategy = {
             let strategies = self.rollback_strategies.read().unwrap();
