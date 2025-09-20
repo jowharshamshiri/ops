@@ -2,9 +2,7 @@
 // Core CRUD ops for entities with state tracking and rollback support
 
 use crate::{
-    Op, OpContext, OpError,
-    stateful::{StatefulOp, StatefulResult, EntityMetadata},
-    persistence::StatePersistenceManager,
+    Op, OpContext, OpError, OpResult, persistence::StatePersistenceManager, stateful::{EntityMetadata, StatefulOp, StatefulResult}
 };
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -102,7 +100,7 @@ impl CreateEntityOp {
 
 #[async_trait]
 impl Op<StatefulResult<EntityData>> for CreateEntityOp {
-    async fn perform(&self, context: &mut OpContext) -> Result<StatefulResult<EntityData>, OpError> {
+    async fn perform(&self, context: &mut OpContext) -> OpResult<StatefulResult<EntityData>> {
         let start_time = std::time::Instant::now();
         
         // Check if entity already exists
@@ -146,7 +144,7 @@ impl StatefulOp<EntityData> for CreateEntityOp {
         &self.metadata
     }
 
-    async fn validate_prerequisites(&self, context: &OpContext) -> Result<(), OpError> {
+    async fn validate_prerequisites(&self, context: &OpContext) -> OpResult<()> {
         // Check if entity already exists
         let entity_key = format!("entity:{}", self.entity_data.id);
         if context.contains_key(&entity_key) {
@@ -220,7 +218,7 @@ impl ReadEntityOp {
 
 #[async_trait]
 impl Op<StatefulResult<EntityData>> for ReadEntityOp {
-    async fn perform(&self, context: &mut OpContext) -> Result<StatefulResult<EntityData>, OpError> {
+    async fn perform(&self, context: &mut OpContext) -> OpResult<StatefulResult<EntityData>> {
         let start_time = std::time::Instant::now();
         
         // Try to get entity from context first
@@ -319,7 +317,7 @@ impl UpdateEntityOp {
 
 #[async_trait]
 impl Op<StatefulResult<EntityData>> for UpdateEntityOp {
-    async fn perform(&self, context: &mut OpContext) -> Result<StatefulResult<EntityData>, OpError> {
+    async fn perform(&self, context: &mut OpContext) -> OpResult<StatefulResult<EntityData>> {
         let start_time = std::time::Instant::now();
         
         // Get existing entity
@@ -378,7 +376,7 @@ impl StatefulOp<EntityData> for UpdateEntityOp {
         &self.metadata
     }
 
-    async fn validate_prerequisites(&self, context: &OpContext) -> Result<(), OpError> {
+    async fn validate_prerequisites(&self, context: &OpContext) -> OpResult<()> {
         // Check if entity exists
         let entity_key = format!("entity:{}", self.entity_id);
         if !context.contains_key(&entity_key) {
@@ -464,7 +462,7 @@ impl DeleteEntityOp {
 
 #[async_trait]
 impl Op<StatefulResult<EntityData>> for DeleteEntityOp {
-    async fn perform(&self, context: &mut OpContext) -> Result<StatefulResult<EntityData>, OpError> {
+    async fn perform(&self, context: &mut OpContext) -> OpResult<StatefulResult<EntityData>> {
         let start_time = std::time::Instant::now();
         
         // Get entity before deletion
@@ -510,7 +508,7 @@ impl StatefulOp<EntityData> for DeleteEntityOp {
         &self.metadata
     }
 
-    async fn validate_prerequisites(&self, context: &OpContext) -> Result<(), OpError> {
+    async fn validate_prerequisites(&self, context: &OpContext) -> OpResult<()> {
         // Check if entity exists
         let entity_key = format!("entity:{}", self.entity_id);
         if !context.contains_key(&entity_key) {

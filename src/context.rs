@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use serde_json;
 use serde::{Serialize, Deserialize};
 use tracing::warn;
-use crate::OpError;
+use crate::{OpError, OpResult};
 
 /// Trait for lazy initialization of context values
 /// Equivalent to Java RequirementFactory<T>
@@ -62,7 +62,7 @@ impl OpContext {
         self
     }
 
-    pub fn put<T: serde::Serialize>(&mut self, key: &str, value: T) -> Result<(), OpError> {
+    pub fn put<T: serde::Serialize>(&mut self, key: &str, value: T) -> OpResult<()> {
         if let Ok(json_value) = serde_json::to_value(value) {
             self.values.insert(key.to_string(), json_value);
             Ok(())
@@ -125,7 +125,7 @@ impl OpContext {
     }
 
     /// Insert method for test compatibility
-    pub fn insert<T: serde::Serialize>(&mut self, key: String, value: T) -> Result<(), OpError> {
+    pub fn insert<T: serde::Serialize>(&mut self, key: String, value: T) -> OpResult<()> {
         self.put(&key, value)
     }
 
@@ -282,7 +282,7 @@ mod tests {
     fn test_requirement_factory_error_handling() {
         let mut ctx = OpContext::new();
         
-        let result: Result<String, OpError> = ctx.require_with("failing_value", || {
+        let result: OpResult<String> = ctx.require_with("failing_value", || {
             Err(OpError::Context("Factory failed".to_string()))
         });
         

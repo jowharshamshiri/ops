@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use std::sync::Arc;
-use crate::{Op, OpContext, OpError};
+use crate::{OpResult, Op, OpContext, OpError};
 
 pub struct BatchOp<T> {
     ops: Vec<Arc<dyn Op<T>>>,
@@ -41,7 +41,7 @@ impl<T> Op<Vec<T>> for BatchOp<T>
 where
     T: Send + Sync + 'static,
 {
-    async fn perform(&self, context: &mut OpContext) -> Result<Vec<T>, OpError> {
+    async fn perform(&self, context: &mut OpContext) -> OpResult<Vec<T>> {
         let mut results = Vec::with_capacity(self.ops.len());
         let mut errors = Vec::new();
         
@@ -104,7 +104,7 @@ impl<T> Op<Vec<T>> for ParallelBatchOp<T>
 where
     T: Send + Sync + 'static,
 {
-    async fn perform(&self, context: &mut OpContext) -> Result<Vec<T>, OpError> {
+    async fn perform(&self, context: &mut OpContext) -> OpResult<Vec<T>> {
         use tokio::task::JoinSet;
         
         let mut join_set = JoinSet::new();

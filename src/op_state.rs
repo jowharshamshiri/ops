@@ -1,7 +1,7 @@
 // Op State Tracking
 // Track state of individual ops (pending, running, completed, failed)
 
-use crate::{OpContext, OpError};
+use crate::{OpContext, OpError, OpResult};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
@@ -260,7 +260,7 @@ impl OpStateTracker {
     }
 
     /// Update op state
-    pub fn update_op_state<F>(&self, instance_id: &OpInstanceId, update_fn: F) -> Result<(), OpError>
+    pub fn update_op_state<F>(&self, instance_id: &OpInstanceId, update_fn: F) -> OpResult<()>
     where
         F: FnOnce(&mut OpStateInfo),
     {
@@ -276,7 +276,7 @@ impl OpStateTracker {
     }
 
     /// Mark op as started
-    pub fn mark_started(&self, instance_id: &OpInstanceId, context: &OpContext) -> Result<(), OpError> {
+    pub fn mark_started(&self, instance_id: &OpInstanceId, context: &OpContext) -> OpResult<()> {
         self.update_op_state(instance_id, |state| {
             state.capture_context(context);
             state.mark_started();
@@ -284,14 +284,14 @@ impl OpStateTracker {
     }
 
     /// Mark op as completed
-    pub fn mark_completed(&self, instance_id: &OpInstanceId, result: Option<String>) -> Result<(), OpError> {
+    pub fn mark_completed(&self, instance_id: &OpInstanceId, result: Option<String>) -> OpResult<()> {
         self.update_op_state(instance_id, |state| {
             state.mark_completed(result);
         })
     }
 
     /// Mark op as failed
-    pub fn mark_failed(&self, instance_id: &OpInstanceId, error: &OpError) -> Result<(), OpError> {
+    pub fn mark_failed(&self, instance_id: &OpInstanceId, error: &OpError) -> OpResult<()> {
         let error_message = error.to_string();
         self.update_op_state(instance_id, |state| {
             state.mark_failed(error_message);
@@ -299,14 +299,14 @@ impl OpStateTracker {
     }
 
     /// Mark op as cancelled
-    pub fn mark_cancelled(&self, instance_id: &OpInstanceId) -> Result<(), OpError> {
+    pub fn mark_cancelled(&self, instance_id: &OpInstanceId) -> OpResult<()> {
         self.update_op_state(instance_id, |state| {
             state.mark_cancelled();
         })
     }
 
     /// Mark op as timed out
-    pub fn mark_timed_out(&self, instance_id: &OpInstanceId) -> Result<(), OpError> {
+    pub fn mark_timed_out(&self, instance_id: &OpInstanceId) -> OpResult<()> {
         self.update_op_state(instance_id, |state| {
             state.mark_timed_out();
         })
@@ -413,7 +413,7 @@ impl OpStateTracker {
     }
 
     /// Create parent-child relationship between ops
-    pub fn link_ops(&self, parent_id: &OpInstanceId, child_id: &OpInstanceId) -> Result<(), OpError> {
+    pub fn link_ops(&self, parent_id: &OpInstanceId, child_id: &OpInstanceId) -> OpResult<()> {
         let mut states = self.states.write().unwrap();
         
         // Set parent in child

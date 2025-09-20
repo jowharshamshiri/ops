@@ -1,6 +1,7 @@
 // Rollback & Recovery System
 // Pluggable rollback strategies for different op types
 
+use crate::OpResult;
 use crate::{Op, OpContext, OpError, stateful::EntityMetadata};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -541,7 +542,7 @@ impl RollbackStrategyRegistry {
     }
     
     /// Set default strategy
-    pub fn set_default_strategy(&mut self, strategy_id: String) -> Result<(), OpError> {
+    pub fn set_default_strategy(&mut self, strategy_id: String) -> OpResult<()> {
         if self.strategies.contains_key(&strategy_id) {
             self.default_strategy_id = strategy_id;
             Ok(())

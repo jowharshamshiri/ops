@@ -2,6 +2,7 @@
 // Structured logging and tracking for all ops with visualization support
 
 use crate::{
+	OpResult,
     Op, OpContext, OpError,
     stateful::{EntityMetadata},
     op_state::{OpStateInfo, OpInstanceId},
@@ -613,7 +614,7 @@ impl AuditTrailCollector {
     }
 
     /// Add completed audit record to collection
-    pub async fn add_record(&self, record: AuditRecord) -> Result<(), OpError> {
+    pub async fn add_record(&self, record: AuditRecord) -> OpResult<()> {
         // Add to in-memory collection
         {
             let mut records = self.records.write().unwrap();

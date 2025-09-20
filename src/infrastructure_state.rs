@@ -1,7 +1,7 @@
 // Infrastructure State Model
 // Model for representing infrastructure component states
 
-use crate::OpError;
+use crate::{OpError, OpResult};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::fmt;
@@ -479,7 +479,7 @@ impl InfrastructureTopology {
     }
 
     /// Create dependency relationship between components
-    pub fn add_dependency(&mut self, dependent_id: &ComponentId, dependency_id: &ComponentId) -> Result<(), OpError> {
+    pub fn add_dependency(&mut self, dependent_id: &ComponentId, dependency_id: &ComponentId) -> OpResult<()> {
         // Check that both components exist
         if !self.components.contains_key(dependent_id) {
             return Err(OpError::ExecutionFailed(
@@ -618,7 +618,7 @@ impl InfrastructureTopology {
         visited: &mut HashSet<ComponentId>,
         visiting: &mut HashSet<ComponentId>,
         result: &mut Vec<ComponentId>,
-    ) -> Result<(), OpError> {
+    ) -> OpResult<()> {
         if visiting.contains(component_id) {
             return Err(OpError::ExecutionFailed(
                 "Circular dependency detected in topology".to_string()

@@ -1,4 +1,4 @@
-use ops::{op, OpContext, OpError, Op};
+use ops::{Op, OpContext, OpError, OpResult, op};
 use serde_json::json;
 
 // New ergonomic ops that use OpContext for input/output
@@ -24,7 +24,7 @@ op!(add_operation(a: i32, b: i32) -> i32 {
 });
 
 #[tokio::main]
-async fn main() -> Result<(), OpError> {
+async fn main() -> OpResult<()> {
     tracing_subscriber::fmt::init();
     let mut context = OpContext::new();
 

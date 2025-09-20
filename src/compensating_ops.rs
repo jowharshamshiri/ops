@@ -2,6 +2,7 @@
 // Automatic generation of compensating ops for rollback
 
 use crate::{
+	OpResult, 
     Op, OpContext, OpError,
     stateful::{StatefulOp, StatefulResult, EntityMetadata},
     rollback::{RollbackInfo, RollbackPriority},
@@ -509,7 +510,7 @@ where
         context: &mut OpContext,
         entity_metadata: &EntityMetadata,
         snapshot: &HashMap<String, String>,
-    ) -> Result<(), OpError> {
+    ) -> OpResult<()> {
         let compensation_key = format!("compensation:{}", entity_metadata.id);
         let compensation_data = serde_json::json!({
             "entity_id": entity_metadata.id,
@@ -536,7 +537,7 @@ where
         self.op.get_entity_metadata()
     }
 
-    async fn validate_prerequisites(&self, context: &OpContext) -> Result<(), OpError> {
+    async fn validate_prerequisites(&self, context: &OpContext) -> OpResult<()> {
         self.op.validate_prerequisites(context).await
     }
 

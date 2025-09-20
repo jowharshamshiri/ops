@@ -1,7 +1,7 @@
 // Stateful Ops Framework
 // Core traits and types for ops that manage state with rollback capability
 
-use crate::{Op, OpContext, OpError};
+use crate::{Op, OpContext, OpError, OpResult};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -95,7 +95,7 @@ where
     fn get_entity_metadata(&self) -> &EntityMetadata;
 
     /// Validate prerequisites for this op
-    async fn validate_prerequisites(&self, _ctx: &OpContext) -> Result<(), OpError> {
+    async fn validate_prerequisites(&self, _ctx: &OpContext) -> OpResult<()> {
         // Default implementation - ops can override
         Ok(())
     }

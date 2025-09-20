@@ -1,8 +1,8 @@
-use ops::{op, perform, execute_ops, OpError};
+use ops::{OpError, OpResult, execute_ops, op, perform};
 use std::sync::atomic::{AtomicU32, Ordering};
 
 // Mock database and config functions for demonstration
-fn connect_to_db() -> Result<String, OpError> {
+fn connect_to_db() -> OpResult<String> {
     Ok("Database connection established".to_string())
 }
 
@@ -33,7 +33,7 @@ op!(increment_counter(base: i32, counter: u32) -> i32 {
 });
 
 #[tokio::main]
-async fn main() -> Result<(), OpError> {
+async fn main() -> OpResult<()> {
     tracing_subscriber::fmt::init();
 
     println!("=== Testing Unified Requirements Syntax ===\n");
