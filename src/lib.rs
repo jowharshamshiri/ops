@@ -3,6 +3,7 @@ pub mod error;
 pub mod op;
 pub mod op_metadata;
 pub mod batch;
+pub mod batch_metadata;
 pub mod wrappers;
 pub mod ops;
 pub mod macros;
