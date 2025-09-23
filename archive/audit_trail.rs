@@ -1,20 +1,4 @@
-// Comprehensive Ops Audit Trail System
-// Structured logging and tracking for all ops with visualization support
-
-use crate::{
-	OpResult,
-    Op, OpContext, OpError,
-    stateful::{EntityMetadata},
-    op_state::{OpStateInfo, OpInstanceId},
-    rollback::{RollbackInfo, RollbackStatus},
-    persistence::{TransitionRecord, StatePersistenceManager},
-    metrics::{OpMetrics, MetricsCollector},
-};
-use async_trait::async_trait;
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::sync::Arc;
-use chrono::{DateTime, Utc};
+use crate::prelude::*;
 
 /// Unique identifier for audit records
 pub type AuditRecordId = String;

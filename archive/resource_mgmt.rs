@@ -1,3 +1,4 @@
+use crate::prelude::*;
 // Resource Management - Automatic resource cleanup and management
 // Leverages Rust's ownership system for superior resource handling
 
@@ -7,7 +8,6 @@ use crate::error::OpError;
 use async_trait::async_trait;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-use tracing::{info, warn};
 
 /// Resource trait for managed resources
 pub trait ManagedResource: Send + Sync {
@@ -132,7 +132,7 @@ where
         }
     }
 
-    pub fn get(&self) -> Result<std::sync::MutexGuard<R>, OpError> {
+    pub fn get(&self) -> Result<std::sync::MutexGuard<'_, R>, OpError> {
         self.resource.lock().map_err(|_| {
             OpError::ExecutionFailed("Failed to acquire resource lock".to_string())
         })

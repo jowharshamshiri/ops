@@ -1,11 +1,5 @@
-use std::collections::HashMap;
-use serde_json;
-use serde::{Serialize, Deserialize};
-use tracing::warn;
-use crate::{OpError, OpResult};
+use crate::prelude::*;
 
-/// Trait for lazy initialization of context values
-/// Equivalent to Java RequirementFactory<T>
 pub trait RequirementFactory<T>: Send + Sync {
     fn create(&self) -> Result<T, OpError>;
 }
@@ -40,12 +34,15 @@ where
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct OpContext {
     values: HashMap<String, serde_json::Value>,
+    #[serde(skip)]
+    references: HashMap<String, Arc<dyn Any + Send + Sync>>,
 }
 
 impl OpContext {
     pub fn new() -> Self {
         Self {
             values: HashMap::new(),
+            references: HashMap::new(),
         }
     }
 
@@ -142,6 +139,53 @@ impl OpContext {
     pub fn set(&mut self, key: String, value: serde_json::Value) {
         self.values.insert(key, value);
     }
+
+    /// Store a reference to a value without serialization
+    /// The value must be Send + Sync and will be wrapped in Arc
+    pub fn put_ref<T>(&mut self, key: &str, value: T) 
+    where
+        T: Any + Send + Sync + 'static,
+    {
+        self.references.insert(key.to_string(), Arc::new(value));
+    }
+
+    /// Store an already Arc-wrapped reference
+    pub fn put_arc<T>(&mut self, key: &str, value: Arc<T>) 
+    where
+        T: Any + Send + Sync + 'static,
+    {
+        self.references.insert(key.to_string(), value);
+    }
+
+    /// Get a reference to a stored value
+    /// Returns None if the key doesn't exist or the type doesn't match
+    pub fn get_ref<T>(&self, key: &str) -> Option<Arc<T>>
+    where
+        T: Any + Send + Sync + 'static,
+    {
+        self.references
+            .get(key)
+            .and_then(|arc_any| arc_any.clone().downcast::<T>().ok())
+    }
+
+    /// Check if a reference exists for the given key
+    pub fn contains_ref(&self, key: &str) -> bool {
+        self.references.contains_key(key)
+    }
+
+    /// Remove a reference from the context
+    pub fn remove_ref(&mut self, key: &str) -> bool {
+        self.references.remove(key).is_some()
+    }
+
+    /// Builder pattern for references
+    pub fn with_ref<T>(mut self, key: &str, value: T) -> Self 
+    where
+        T: Any + Send + Sync + 'static,
+    {
+        self.put_ref(key, value);
+        self
+    }
 }
 
 /// HOLLOW context pattern - singleton no-op context for testing
@@ -183,12 +227,19 @@ impl ContextProvider for HollowOpContext {
         // Note: This is a design limitation - we can't return a mutable reference
         // from a hollow context. In practice, ops using hollow context
         // should handle this gracefully.
-        static mut HOLLOW_STORAGE: Option<OpContext> = None;
+        use std::sync::OnceLock;
+        static HOLLOW_STORAGE: OnceLock<std::sync::Mutex<OpContext>> = OnceLock::new();
+        
+        let context = HOLLOW_STORAGE.get_or_init(|| {
+            std::sync::Mutex::new(OpContext::new())
+        });
+        
+        // This is unsafe but needed for the hollow context pattern
+        // In practice, hollow contexts should be avoided
         unsafe {
-            if HOLLOW_STORAGE.is_none() {
-                HOLLOW_STORAGE = Some(OpContext::new());
-            }
-            HOLLOW_STORAGE.as_mut().unwrap()
+            let mutex_ptr = context as *const std::sync::Mutex<OpContext> as *mut std::sync::Mutex<OpContext>;
+            let guard = (*mutex_ptr).get_mut().unwrap();
+            guard
         }
     }
     
@@ -288,5 +339,93 @@ mod tests {
         
         assert!(result.is_err());
         assert!(!ctx.contains_key("failing_value"));
+    }
+
+    #[test]
+    fn test_reference_storage() {
+        let mut ctx = OpContext::new();
+        
+        // Test storing a reference
+        let data = vec![1, 2, 3, 4, 5];
+        ctx.put_ref("numbers", data.clone());
+        
+        // Test retrieving the reference
+        let retrieved: Option<Arc<Vec<i32>>> = ctx.get_ref("numbers");
+        assert!(retrieved.is_some());
+        assert_eq!(*retrieved.unwrap(), data);
+        
+        // Test contains_ref
+        assert!(ctx.contains_ref("numbers"));
+        assert!(!ctx.contains_ref("nonexistent"));
+    }
+
+    #[test]
+    fn test_reference_type_safety() {
+        let mut ctx = OpContext::new();
+        
+        // Store a String
+        ctx.put_ref("text", "hello".to_string());
+        
+        // Try to retrieve as wrong type
+        let wrong_type: Option<Arc<i32>> = ctx.get_ref("text");
+        assert!(wrong_type.is_none());
+        
+        // Retrieve as correct type
+        let correct_type: Option<Arc<String>> = ctx.get_ref("text");
+        assert!(correct_type.is_some());
+        assert_eq!(*correct_type.unwrap(), "hello");
+    }
+
+    #[test]
+    fn test_arc_storage() {
+        let mut ctx = OpContext::new();
+        
+        // Test with pre-wrapped Arc
+        let data = Arc::new(vec![10, 20, 30]);
+        let data_clone = data.clone();
+        ctx.put_arc("shared_data", data);
+        
+        // Retrieve and verify it's the same Arc
+        let retrieved: Option<Arc<Vec<i32>>> = ctx.get_ref("shared_data");
+        assert!(retrieved.is_some());
+        let retrieved_arc = retrieved.unwrap();
+        assert_eq!(*retrieved_arc, *data_clone);
+        
+        // Verify they point to the same memory
+        assert!(Arc::ptr_eq(&retrieved_arc, &data_clone));
+    }
+
+    #[test]
+    fn test_reference_builder_pattern() {
+        let data1 = vec![1, 2, 3];
+        let data2 = "test string".to_string();
+        
+        let ctx = OpContext::new()
+            .with_ref("list", data1.clone())
+            .with_ref("text", data2.clone());
+        
+        let retrieved_list: Option<Arc<Vec<i32>>> = ctx.get_ref("list");
+        let retrieved_text: Option<Arc<String>> = ctx.get_ref("text");
+        
+        assert!(retrieved_list.is_some());
+        assert!(retrieved_text.is_some());
+        assert_eq!(*retrieved_list.unwrap(), data1);
+        assert_eq!(*retrieved_text.unwrap(), data2);
+    }
+
+    #[test]
+    fn test_reference_removal() {
+        let mut ctx = OpContext::new();
+        
+        ctx.put_ref("temp", vec![1, 2, 3]);
+        assert!(ctx.contains_ref("temp"));
+        
+        let removed = ctx.remove_ref("temp");
+        assert!(removed);
+        assert!(!ctx.contains_ref("temp"));
+        
+        // Try to remove again
+        let removed_again = ctx.remove_ref("temp");
+        assert!(!removed_again);
     }
 }

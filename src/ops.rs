@@ -1,3 +1,4 @@
+use crate::prelude::*;
 // OPS utility module - Central execution and utility functions
 // Implements Java OPS class functionality with Rust enhancements
 

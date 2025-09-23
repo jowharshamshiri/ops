@@ -1,3 +1,4 @@
+use crate::prelude::*;
 // Safe Point Management
 // Create and manage safe points for rollback boundaries
 
@@ -423,7 +424,7 @@ impl SafePointManager {
 
         // Remove from persistence if available
         if removed && self.persistence_manager.is_some() {
-            if let Some(persistence_manager) = &self.persistence_manager {
+            if let Some(_persistence_manager) = &self.persistence_manager {
                 // Note: Persistence manager doesn't have delete_state method
                 // In a full implementation, we would need to add this method
                 // For now, we'll just log that deletion would happen

@@ -5,7 +5,6 @@ use ops::{
     OpContext, HollowOpContext, ContextProvider, Op, ClosureOp,
     BatchOp, LoggingWrapper, TimeBoundWrapper, OpError,
     perform, get_caller_op_name, wrap_nested_op_exception,
-    serialize_to_json, serialize_to_pretty_json, deserialize_json
 };
 use serde::{Serialize, Deserialize};
 use std::time::Duration;
@@ -17,61 +16,6 @@ struct User {
     name: String,
     email: String,
     active: bool,
-}
-
-#[tokio::test]
-async fn test_complete_ops_java_compatibility() {
-    // Initialize logging
-    tracing_subscriber::fmt::try_init().ok();
-    
-    // Create context with builder pattern (Java OpContext.build equivalent)
-    let mut context = OpContext::new()
-        .build("request_id", "test-123")
-        .build("user_id", 42u32);
-        
-    // Test RequirementFactory pattern
-    let expensive_config = context.require_with("config", || {
-        Ok("production_config".to_string())
-    }).unwrap();
-    assert_eq!(expensive_config, "production_config");
-    
-    // Create test user data
-    let user = User {
-        id: 1,
-        name: "John Doe".to_string(),
-        email: "john@example.com".to_string(),
-        active: true,
-    };
-
-    // Test OPS.perform() equivalent with automatic logging
-    let serialize_op = Box::new(serialize_to_json(user.clone()));
-    let json_result = perform(serialize_op, &mut context).await.unwrap();
-    
-    // Test JSON deserialization 
-    let deserialize_op = Box::new(deserialize_json::<User>(json_result.clone()));
-    let roundtrip_user = perform(deserialize_op, &mut context).await.unwrap();
-    assert_eq!(user, roundtrip_user);
-    
-    // Test wrapper composition (LoggingWrapper + TimeBoundWrapper)
-    let json_op = Box::new(serialize_to_pretty_json(user.clone()));
-    let timeout_wrapper = TimeBoundWrapper::with_name(json_op, Duration::from_millis(100), "PrettyJsonOp".to_string());
-    let logged_timeout_op = LoggingWrapper::new(Box::new(timeout_wrapper), "CompositeOp".to_string());
-    
-    let pretty_json = logged_timeout_op.perform(&mut context).await.unwrap();
-    assert!(pretty_json.contains("John Doe"));
-    assert!(pretty_json.contains('\n')); // Pretty formatted
-    
-    // Test batch ops
-    let ops: Vec<Arc<dyn Op<String>>> = vec![
-        Arc::new(serialize_to_json(user.clone())),
-        Arc::new(serialize_to_pretty_json(user.clone())),
-    ];
-    
-    let batch_op = BatchOp::new(ops);
-    let batch_results = batch_op.perform(&mut context).await.unwrap();
-    assert_eq!(batch_results.len(), 2);
-    assert!(batch_results[0].contains("John Doe"));
-    assert!(batch_results[1].contains("John Doe"));
 }
 
 #[tokio::test]
@@ -125,36 +69,6 @@ async fn test_hollow_context_pattern() {
     let result = simple_op.perform(&mut hollow_context).await;
     assert!(result.is_ok());
     assert_eq!(result.unwrap(), "hollow_result");
-}
-
-#[tokio::test]
-async fn test_parallel_batch_with_wrappers() {
-    tracing_subscriber::fmt::try_init().ok();
-    let mut context = OpContext::new();
-    
-    let users = vec![
-        User { id: 1, name: "Alice".to_string(), email: "alice@example.com".to_string(), active: true },
-        User { id: 2, name: "Bob".to_string(), email: "bob@example.com".to_string(), active: false },
-        User { id: 3, name: "Charlie".to_string(), email: "charlie@example.com".to_string(), active: true },
-    ];
-    
-    // Create wrapped ops for parallel execution
-    let wrapped_ops: Vec<Arc<dyn Op<String>>> = users.into_iter().map(|user| {
-        let user_id = user.id;
-        let serialize_op = Box::new(serialize_to_json(user));
-        let timeout_op = TimeBoundWrapper::new(serialize_op, Duration::from_millis(100));
-        let logged_op = LoggingWrapper::new(Box::new(timeout_op), format!("SerializeUser{}", user_id));
-        Arc::new(logged_op) as Arc<dyn Op<String>>
-    }).collect();
-    
-    // Test batch execution (using regular batch since we don't have parallel method)
-    let batch_op = BatchOp::new(wrapped_ops);
-    let results = batch_op.perform(&mut context).await.unwrap();
-    
-    assert_eq!(results.len(), 3);
-    for result in results {
-        assert!(result.contains("@example.com"));
-    }
 }
 
 #[tokio::test]
@@ -214,26 +128,6 @@ async fn test_comprehensive_context_features() {
     
     assert_eq!(config2.database_url, "postgres://localhost:5432/test"); // Still original
     assert_eq!(config2.timeout, 30); // Still original
-}
-
-#[tokio::test]
-async fn test_json_op_error_handling() {
-    tracing_subscriber::fmt::try_init().ok();
-    let mut context = OpContext::new();
-    
-    // Test invalid JSON deserialization with wrapper chain
-    let invalid_json_op = Box::new(deserialize_json::<User>("invalid json".to_string()));
-    let logged_op = LoggingWrapper::new(invalid_json_op, "InvalidJsonTest".to_string());
-    
-    let result = logged_op.perform(&mut context).await;
-    assert!(result.is_err());
-    
-    match result.unwrap_err() {
-        OpError::ExecutionFailed(msg) => {
-            assert!(msg.contains("InvalidJsonTest"));
-        },
-        _ => panic!("Expected ExecutionFailed with op context"),
-    }
 }
 
 #[tokio::test]

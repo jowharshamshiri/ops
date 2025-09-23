@@ -1,3 +1,4 @@
+use crate::prelude::*;
 // LoggingWrapper implementation with full Java reference functionality
 // Implements LoggingOpWrapper.java patterns with Rust enhancements
 

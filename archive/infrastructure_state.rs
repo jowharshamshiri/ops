@@ -1,3 +1,4 @@
+use crate::prelude::*;
 // Infrastructure State Model
 // Model for representing infrastructure component states
 

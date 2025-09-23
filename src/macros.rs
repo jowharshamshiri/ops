@@ -1,3 +1,4 @@
+use crate::prelude::*;
 /// Store a variable in context using its name as the key
 /// ctx_put!(context, variable_name)
 #[macro_export]
@@ -22,10 +23,14 @@ macro_rules! ctx_get {
 macro_rules! ctx_require {
     ($ctx:expr, $var:ident) => {
         $ctx.get(stringify!($var))
-            .ok_or_else(|| $crate::error::OpError::ExecutionFailed(format!(
-                "Missing required input: '{}'",
-                stringify!($var)
-            )))
+            .ok_or_else(|| {
+                let backtrace = std::backtrace::Backtrace::capture();
+                $crate::error::OpError::ExecutionFailed(format!(
+                    "Missing required input: '{}'\nStack trace:\n{}",
+                    stringify!($var),
+                    backtrace
+                ))
+            })
     };
 }
 
@@ -45,6 +50,56 @@ macro_rules! ctx_result {
                 e
             ))),
         }
+    };
+}
+
+/// Store a reference in context without serialization
+/// ctx_put_ref!(context, var_name, value);
+#[macro_export]
+macro_rules! ctx_put_ref {
+    ($ctx:expr, $var:ident, $value:expr) => {
+        $ctx.put_ref(stringify!($var), $value)
+    };
+    ($ctx:expr, $var:ident) => {
+        $ctx.put_ref(stringify!($var), $var)
+    };
+}
+
+/// Store an Arc in context without additional wrapping
+/// ctx_put_arc!(context, var_name, arc_value);
+#[macro_export]
+macro_rules! ctx_put_arc {
+    ($ctx:expr, $var:ident, $value:expr) => {
+        $ctx.put_arc(stringify!($var), $value)
+    };
+    ($ctx:expr, $var:ident) => {
+        $ctx.put_arc(stringify!($var), $var)
+    };
+}
+
+/// Get a reference from context
+/// let var: Option<Arc<Type>> = ctx_get_ref!(context, var_name);
+#[macro_export]
+macro_rules! ctx_get_ref {
+    ($ctx:expr, $var:ident) => {
+        $ctx.get_ref::<_>(stringify!($var))
+    };
+}
+
+/// Require a reference from context with error handling
+/// let var: Arc<Type> = ctx_require_ref!(context, var_name)?;
+#[macro_export]
+macro_rules! ctx_require_ref {
+    ($ctx:expr, $var:ident) => {
+        $ctx.get_ref(stringify!($var))
+            .ok_or_else(|| {
+                let backtrace = std::backtrace::Backtrace::capture();
+                $crate::error::OpError::ExecutionFailed(format!(
+                    "Missing required reference: '{}'\nStack trace:\n{}",
+                    stringify!($var),
+                    backtrace
+                ))
+            })
     };
 }
 
@@ -880,6 +935,39 @@ mod macro_tests {
         let stored_op_result: Option<String> = ctx.get("TestOp");
         assert_eq!(stored_op_result, Some("test_result".to_string()));
 
+        Ok(())
+    }
+
+    #[test]
+    fn test_reference_macros() -> Result<(), crate::error::OpError> {
+        let mut ctx = crate::context::OpContext::new();
+        
+        // Test ctx_put_ref! macro with value
+        let data = vec![1, 2, 3, 4, 5];
+        ctx_put_ref!(ctx, test_data, data.clone());
+        
+        // Test ctx_get_ref! macro
+        let retrieved_data: Option<std::sync::Arc<Vec<i32>>> = ctx_get_ref!(ctx, test_data);
+        assert!(retrieved_data.is_some());
+        assert_eq!(*retrieved_data.unwrap(), data);
+        
+        // Test ctx_require_ref! macro
+        let required_data: std::sync::Arc<Vec<i32>> = ctx_require_ref!(ctx, test_data)?;
+        assert_eq!(*required_data, data);
+        
+        // Test ctx_put_ref! macro with variable name only
+        let file_paths = vec!["file1.txt".to_string(), "file2.txt".to_string()];
+        ctx_put_ref!(ctx, file_paths);
+        
+        let retrieved_paths: Option<std::sync::Arc<Vec<String>>> = ctx_get_ref!(ctx, file_paths);
+        assert!(retrieved_paths.is_some());
+        assert_eq!(*retrieved_paths.unwrap(), vec!["file1.txt", "file2.txt"]);
+        
+        // Test error case
+        let missing_ref_result: Result<std::sync::Arc<String>, crate::error::OpError> = 
+            ctx_require_ref!(ctx, missing_ref);
+        assert!(missing_ref_result.is_err());
+        
         Ok(())
     }
 
