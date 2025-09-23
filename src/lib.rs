@@ -1,7 +1,8 @@
-use crate::prelude::*;
 pub mod context;
+pub mod contexts;
 pub mod error;
 pub mod op;
+pub mod op_metadata;
 pub mod batch;
 pub mod wrappers;
 pub mod ops;
@@ -9,8 +10,10 @@ pub mod macros;
 pub mod loop_op;
 
 pub use context::{OpContext, HollowOpContext, RequirementFactory, ClosureFactory, ContextProvider};
+pub use contexts::{DryContext, WetContext};
 pub use error::OpError;
-pub use op::{Op, ClosureOp};
+pub use op::Op;
+pub use op_metadata::{OpMetadata, OpRequest, ValidationReport};
 pub use batch::BatchOp;
 pub use wrappers::logging::LoggingWrapper;
 pub use wrappers::timeout::TimeBoundWrapper;
@@ -27,7 +30,7 @@ pub mod prelude {
 	
 	pub use crate::{
 		OpResult,
-		Op, OpContext, OpError
+		Op, OpContext, OpError, DryContext, WetContext, OpMetadata
 	};
 	pub use async_trait::async_trait;
 	pub use std::collections::{HashMap};

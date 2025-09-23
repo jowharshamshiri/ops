@@ -1,4 +1,5 @@
 use crate::prelude::*;
+use crate::{DryContext, WetContext};
 
 pub trait RequirementFactory<T>: Send + Sync {
     fn create(&self) -> Result<T, OpError>;
@@ -185,6 +186,39 @@ impl OpContext {
     {
         self.put_ref(key, value);
         self
+    }
+
+    /// Split OpContext into DryContext and WetContext
+    pub fn split(self) -> (DryContext, WetContext) {
+        let mut dry = DryContext::new();
+        for (key, value) in self.values {
+            dry.insert(key, value);
+        }
+
+        let mut wet = WetContext::new();
+        for (key, reference) in self.references {
+            wet.insert_arc(key, reference);
+        }
+
+        (dry, wet)
+    }
+
+    /// Create OpContext from DryContext and WetContext
+    pub fn from_split(dry: DryContext, _wet: &WetContext) -> OpResult<Self> {
+        let mut ctx = OpContext::new();
+        
+        // Copy all values from dry context
+        for (key, value) in dry.values() {
+            ctx.set(key.clone(), value.clone());
+        }
+        
+        // Copy all references from wet context
+        // Note: We can't easily clone the references map directly,
+        // so this is a limitation of the current design
+        // The wet context would need to be passed by reference
+        warn!("OpContext::from_split - wet context references must be re-added manually");
+        
+        Ok(ctx)
     }
 }
 

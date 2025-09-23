@@ -1,4 +1,3 @@
-use crate::prelude::*;
 /// Store a variable in context using its name as the key
 /// ctx_put!(context, variable_name)
 #[macro_export]
@@ -103,6 +102,9 @@ macro_rules! ctx_require_ref {
     };
 }
 
+/// DEPRECATED: This macro is incompatible with the new Op trait that uses dry/wet contexts.
+/// Please implement the Op trait directly instead.
+///
 /// Ergonomic macro to create Op implementations from function-like syntax
 ///
 /// The op reads its inputs from the OpContext and writes its output back to the OpContext.
@@ -125,6 +127,7 @@ macro_rules! ctx_require_ref {
 /// - Passes `context: OpContext` parameter directly without input extraction
 /// - Executes the body with parameters bound
 /// - Writes the result back to OpContext using the op name and "result"
+#[deprecated(note = "This macro is incompatible with the new Op trait. Implement Op trait directly.")]
 #[macro_export]
 macro_rules! op {
     // Special case: single parameter that is ctx: &mut OpContext

@@ -3,7 +3,7 @@ use crate::prelude::*;
 // Superior implementation using tokio::time::timeout vs Java's unsafe threading
 
 use crate::op::Op;
-use crate::context::OpContext;
+use crate::{DryContext, WetContext, OpMetadata};
 use crate::error::OpError;
 use async_trait::async_trait;
 use std::time::{Duration, Instant};
@@ -83,11 +83,11 @@ impl<T> Op<T> for TimeBoundWrapper<T>
 where
     T: Send + 'static,
 {
-    async fn perform(&self, context: &mut OpContext) -> Result<T, OpError> {
+    async fn perform(&self, dry: &DryContext, wet: &WetContext) -> OpResult<T> {
         let start_time = Instant::now();
         
         // Use tokio's timeout mechanism (superior to Java's manual threading)
-        match tokio::time::timeout(self.timeout_duration, self.wrapped_op.perform(context)).await {
+        match tokio::time::timeout(self.timeout_duration, self.wrapped_op.perform(dry, wet)).await {
             Ok(result) => {
                 // Log near-timeout completions for monitoring
                 let duration = start_time.elapsed();
@@ -104,6 +104,15 @@ where
                 })
             }
         }
+    }
+    
+    fn metadata(&self) -> OpMetadata {
+        // Pass through metadata from wrapped op with timeout info
+        let mut metadata = self.wrapped_op.metadata();
+        if let Some(ref name) = self.op_name {
+            metadata.description = Some(format!("{} (timeout: {:?})", name, self.timeout_duration));
+        }
+        metadata
     }
 }
 
@@ -143,41 +152,60 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::op::{Op, ClosureOp};
-    use crate::context::OpContext;
+    use crate::op::Op;
     use std::time::Duration;
 
+    struct SlowOp;
+    
+    #[async_trait]
+    impl Op<i32> for SlowOp {
+        async fn perform(&self, _dry: &DryContext, _wet: &WetContext) -> OpResult<i32> {
+            tokio::time::sleep(Duration::from_millis(50)).await;
+            Ok(42)
+        }
+        
+        fn metadata(&self) -> OpMetadata {
+            OpMetadata::builder("SlowOp").build()
+        }
+    }
+    
     #[tokio::test]
     async fn test_timeout_wrapper_success() {
-        let mut context = OpContext::new();
+        let dry = DryContext::new();
+        let wet = WetContext::new();
         
-        let op = Box::new(ClosureOp::new(|_ctx| {
-            Box::pin(async move { 
-                tokio::time::sleep(Duration::from_millis(50)).await;
-                Ok(42) 
-            })
-        }));
+        let op = Box::new(SlowOp);
         
         let timeout_wrapper = TimeBoundWrapper::new(op, Duration::from_millis(200));
-        let result = timeout_wrapper.perform(&mut context).await;
+        let result = timeout_wrapper.perform(&dry, &wet).await;
         
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), 42);
     }
 
+    struct VerySlowOp;
+    
+    #[async_trait]
+    impl Op<i32> for VerySlowOp {
+        async fn perform(&self, _dry: &DryContext, _wet: &WetContext) -> OpResult<i32> {
+            tokio::time::sleep(Duration::from_millis(200)).await;
+            Ok(42)
+        }
+        
+        fn metadata(&self) -> OpMetadata {
+            OpMetadata::builder("VerySlowOp").build()
+        }
+    }
+    
     #[tokio::test]
     async fn test_timeout_wrapper_timeout() {
-        let mut context = OpContext::new();
+        let dry = DryContext::new();
+        let wet = WetContext::new();
         
-        let op = Box::new(ClosureOp::new(|_ctx| {
-            Box::pin(async move { 
-                tokio::time::sleep(Duration::from_millis(200)).await;
-                Ok(42) 
-            })
-        }));
+        let op = Box::new(VerySlowOp);
         
         let timeout_wrapper = TimeBoundWrapper::new(op, Duration::from_millis(50));
-        let result = timeout_wrapper.perform(&mut context).await;
+        let result = timeout_wrapper.perform(&dry, &wet).await;
         
         assert!(result.is_err());
         match result.unwrap_err() {
@@ -188,55 +216,91 @@ mod tests {
         }
     }
 
+    struct StringOp;
+    
+    #[async_trait]
+    impl Op<String> for StringOp {
+        async fn perform(&self, _dry: &DryContext, _wet: &WetContext) -> OpResult<String> {
+            Ok("success".to_string())
+        }
+        
+        fn metadata(&self) -> OpMetadata {
+            OpMetadata::builder("StringOp").build()
+        }
+    }
+    
     #[tokio::test]
     async fn test_timeout_wrapper_with_name() {
-        let mut context = OpContext::new();
+        let dry = DryContext::new();
+        let wet = WetContext::new();
         
-        let op = Box::new(ClosureOp::new(|_ctx| {
-            Box::pin(async move { Ok("success".to_string()) })
-        }));
+        let op = Box::new(StringOp);
         
         let timeout_wrapper = TimeBoundWrapper::with_name(
             op, 
             Duration::from_millis(100),
             "TestOp".to_string()
         );
-        let result = timeout_wrapper.perform(&mut context).await;
+        let result = timeout_wrapper.perform(&dry, &wet).await;
         
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), "success");
     }
 
+    struct IntOp;
+    
+    #[async_trait]
+    impl Op<i32> for IntOp {
+        async fn perform(&self, _dry: &DryContext, _wet: &WetContext) -> OpResult<i32> {
+            Ok(100)
+        }
+        
+        fn metadata(&self) -> OpMetadata {
+            OpMetadata::builder("IntOp").build()
+        }
+    }
+    
     #[tokio::test]
     async fn test_caller_name_wrapper() {
-        let mut context = OpContext::new();
+        let dry = DryContext::new();
+        let wet = WetContext::new();
         
-        let op = Box::new(ClosureOp::new(|_ctx| {
-            Box::pin(async move { Ok(100) })
-        }));
+        let op = Box::new(IntOp);
         
         let timeout_wrapper = create_timeout_wrapper_with_caller_name(op, Duration::from_millis(100));
-        let result = timeout_wrapper.perform(&mut context).await;
+        let result = timeout_wrapper.perform(&dry, &wet).await;
         
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), 100);
     }
 
+    struct CompositeOp;
+    
+    #[async_trait]
+    impl Op<String> for CompositeOp {
+        async fn perform(&self, _dry: &DryContext, _wet: &WetContext) -> OpResult<String> {
+            Ok("logged and timed".to_string())
+        }
+        
+        fn metadata(&self) -> OpMetadata {
+            OpMetadata::builder("CompositeOp").build()
+        }
+    }
+    
     #[tokio::test]
     async fn test_logged_timeout_wrapper() {
         tracing_subscriber::fmt::try_init().ok();
-        let mut context = OpContext::new();
+        let dry = DryContext::new();
+        let wet = WetContext::new();
         
-        let op = Box::new(ClosureOp::new(|_ctx| {
-            Box::pin(async move { Ok("logged and timed".to_string()) })
-        }));
+        let op = Box::new(CompositeOp);
         
         let wrapped = create_logged_timeout_wrapper(
             op,
             Duration::from_millis(100), 
             "CompositeOp".to_string()
         );
-        let result = wrapped.perform(&mut context).await;
+        let result = wrapped.perform(&dry, &wet).await;
         
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), "logged and timed");

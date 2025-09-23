@@ -30,3 +30,9 @@ impl Clone for OpError {
         }
     }
 }
+
+impl From<serde_json::Error> for OpError {
+    fn from(e: serde_json::Error) -> Self {
+        OpError::Other(Box::new(e))
+    }
+}

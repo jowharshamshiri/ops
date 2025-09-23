@@ -39,12 +39,12 @@ impl<T> Op<Vec<T>> for BatchOp<T>
 where
     T: Send + Sync + 'static,
 {
-    async fn perform(&self, context: &mut OpContext) -> OpResult<Vec<T>> {
+    async fn perform(&self, dry: &DryContext, wet: &WetContext) -> OpResult<Vec<T>> {
         let mut results = Vec::with_capacity(self.ops.len());
         let mut errors = Vec::new();
         
         for (index, op) in self.ops.iter().enumerate() {
-            match op.perform(context).await {
+            match op.perform(dry, wet).await {
                 Ok(result) => results.push(result),
                 Err(error) => {
                     if self.continue_on_error {
@@ -65,6 +65,12 @@ where
         }
         
         Ok(results)
+    }
+    
+    fn metadata(&self) -> OpMetadata {
+        OpMetadata::builder("BatchOp")
+            .description(format!("Batch of {} ops", self.ops.len()))
+            .build()
     }
 }
 
@@ -102,52 +108,41 @@ impl<T> Op<Vec<T>> for ParallelBatchOp<T>
 where
     T: Send + Sync + 'static,
 {
-    async fn perform(&self, context: &mut OpContext) -> OpResult<Vec<T>> {
-        use tokio::task::JoinSet;
+    async fn perform(&self, dry: &DryContext, wet: &WetContext) -> OpResult<Vec<T>> {
+        use futures::future;
         
-        let mut join_set = JoinSet::new();
-        let context_clone = context.clone();
+        let mut futures = Vec::new();
         
         for (index, op) in self.ops.iter().enumerate() {
             let op = Arc::clone(op);
-            let mut ctx = context_clone.clone();
+            let dry_ctx = dry.clone();
             
-            join_set.spawn(async move {
-                let result = op.perform(&mut ctx).await;
+            futures.push(async move {
+                let result = op.perform(&dry_ctx, wet).await;
                 (index, result)
             });
-            
-            if let Some(max_concurrent) = self.max_concurrent {
-                if join_set.len() >= max_concurrent {
-                    if let Some(result) = join_set.join_next().await {
-                        match result {
-                            Ok((_, Ok(_))) => {},
-                            Ok((idx, Err(e))) if !self.continue_on_error => {
-                                return Err(OpError::BatchFailed(
-                                    format!("Op {} failed: {}", idx, e)
-                                ));
-                            },
-                            Err(join_error) => {
-                                return Err(OpError::BatchFailed(
-                                    format!("Task join error: {}", join_error)
-                                ));
-                            },
-                            _ => {},
-                        }
-                    }
-                }
-            }
         }
         
-        let mut results: Vec<Option<T>> = (0..self.ops.len()).map(|_| None).collect();
+        // Execute futures with optional concurrency limit
+        let results = if let Some(max_concurrent) = self.max_concurrent {
+            use futures::stream::{self, StreamExt};
+            stream::iter(futures)
+                .buffered(max_concurrent)
+                .collect::<Vec<_>>()
+                .await
+        } else {
+            future::join_all(futures).await
+        };
+        
+        let mut ordered_results: Vec<Option<T>> = (0..self.ops.len()).map(|_| None).collect();
         let mut errors = Vec::new();
         
-        while let Some(result) = join_set.join_next().await {
+        for (index, result) in results {
             match result {
-                Ok((index, Ok(value))) => {
-                    results[index] = Some(value);
+                Ok(value) => {
+                    ordered_results[index] = Some(value);
                 },
-                Ok((index, Err(error))) => {
+                Err(error) => {
                     if self.continue_on_error {
                         errors.push((index, error));
                     } else {
@@ -156,20 +151,21 @@ where
                         ));
                     }
                 },
-                Err(join_error) => {
-                    return Err(OpError::BatchFailed(
-                        format!("Task join error: {}", join_error)
-                    ));
-                }
             }
         }
         
-        let final_results: Result<Vec<T>, _> = results
+        let final_results: Result<Vec<T>, _> = ordered_results
             .into_iter()
             .collect::<Option<Vec<T>>>()
             .ok_or_else(|| OpError::BatchFailed("Missing results".to_string()));
             
         final_results
+    }
+    
+    fn metadata(&self) -> OpMetadata {
+        OpMetadata::builder("ParallelBatchOp")
+            .description(format!("Parallel batch of {} ops", self.ops.len()))
+            .build()
     }
 }
 
@@ -184,12 +180,16 @@ mod tests {
     
     #[async_trait]
     impl Op<i32> for TestOp {
-        async fn perform(&self, _context: &mut OpContext) -> Result<i32, OpError> {
+        async fn perform(&self, _dry: &DryContext, _wet: &WetContext) -> OpResult<i32> {
             if self.should_fail {
                 Err(OpError::ExecutionFailed("Test failure".to_string()))
             } else {
                 Ok(self.value)
             }
+        }
+        
+        fn metadata(&self) -> OpMetadata {
+            OpMetadata::builder("TestOp").build()
         }
     }
     
@@ -201,9 +201,10 @@ mod tests {
         ];
         
         let batch = BatchOp::new(ops);
-        let mut ctx = OpContext::new();
+        let dry = DryContext::new();
+        let wet = WetContext::new();
         
-        let results = batch.perform(&mut ctx).await.unwrap();
+        let results = batch.perform(&dry, &wet).await.unwrap();
         assert_eq!(results, vec![1, 2]);
     }
     
@@ -215,9 +216,10 @@ mod tests {
         ];
         
         let batch = BatchOp::new(ops);
-        let mut ctx = OpContext::new();
+        let dry = DryContext::new();
+        let wet = WetContext::new();
         
-        let result = batch.perform(&mut ctx).await;
+        let result = batch.perform(&dry, &wet).await;
         assert!(result.is_err());
     }
     
@@ -229,9 +231,10 @@ mod tests {
         ];
         
         let batch = ParallelBatchOp::new(ops);
-        let mut ctx = OpContext::new();
+        let dry = DryContext::new();
+        let wet = WetContext::new();
         
-        let results = batch.perform(&mut ctx).await.unwrap();
+        let results = batch.perform(&dry, &wet).await.unwrap();
         assert_eq!(results.len(), 2);
         assert!(results.contains(&1));
         assert!(results.contains(&2));
