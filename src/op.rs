@@ -4,7 +4,7 @@ use crate::{DryContext, WetContext, OpMetadata};
 
 #[async_trait]
 pub trait Op<T>: Send + Sync {
-    async fn perform(&self, dry: &DryContext, wet: &WetContext) -> OpResult<T>;
+    async fn perform(&self, dry: &mut DryContext, wet: &mut WetContext) -> OpResult<T>;
     
     fn metadata(&self) -> OpMetadata;
 }
@@ -21,7 +21,7 @@ mod tests {
     
     #[async_trait]
     impl Op<i32> for TestOp {
-        async fn perform(&self, _dry: &DryContext, _wet: &WetContext) -> OpResult<i32> {
+        async fn perform(&self, _dry: &mut DryContext, _wet: &mut WetContext) -> OpResult<i32> {
             Ok(self.value)
         }
         
@@ -36,10 +36,10 @@ mod tests {
     #[tokio::test]
     async fn test_op_execution() {
         let op = TestOp { value: 42 };
-        let dry = DryContext::new();
-        let wet = WetContext::new();
+        let mut dry = DryContext::new();
+        let mut wet = WetContext::new();
         
-        let result = op.perform(&dry, &wet).await;
+        let result = op.perform(&mut dry, &mut wet).await;
         assert_eq!(result.unwrap(), 42);
     }
     
@@ -49,7 +49,7 @@ mod tests {
         
         #[async_trait]
         impl Op<String> for ContextUsingOp {
-            async fn perform(&self, dry: &DryContext, _wet: &WetContext) -> OpResult<String> {
+            async fn perform(&self, dry: &mut DryContext, _wet: &mut WetContext) -> OpResult<String> {
                 let name = dry.get_required::<String>("name")?;
                 Ok(format!("Hello, {}!", name))
             }
@@ -69,10 +69,10 @@ mod tests {
         }
         
         let op = ContextUsingOp;
-        let dry = DryContext::new().with_value("name", "World");
-        let wet = WetContext::new();
+        let mut dry = DryContext::new().with_value("name", "World");
+        let mut wet = WetContext::new();
         
-        let result = op.perform(&dry, &wet).await;
+        let result = op.perform(&mut dry, &mut wet).await;
         assert_eq!(result.unwrap(), "Hello, World!");
     }
     

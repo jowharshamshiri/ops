@@ -27,7 +27,7 @@ struct ProcessDataOp;
 
 #[async_trait]
 impl Op<String> for ProcessDataOp {
-    async fn perform(&self, dry: &DryContext, wet: &WetContext) -> OpResult<String> {
+    async fn perform(&self, dry: &mut DryContext, wet: &mut WetContext) -> OpResult<String> {
         // Using dry_require for dry context
         let input_data: String = dry_require!(dry, input_data)?;
         let process_count: i32 = dry_require!(dry, process_count)?;
@@ -114,7 +114,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     // Execute the op
     let op = ProcessDataOp;
-    let result = op.perform(&dry, &wet).await?;
+    let result = op.perform(&mut dry, &mut wet).await?;
     println!("\nProcessed result: {}", result);
     
     // Demonstrate dry_result macro

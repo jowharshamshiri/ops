@@ -83,7 +83,7 @@ impl<T> Op<T> for TimeBoundWrapper<T>
 where
     T: Send + 'static,
 {
-    async fn perform(&self, dry: &DryContext, wet: &WetContext) -> OpResult<T> {
+    async fn perform(&self, dry: &mut DryContext, wet: &mut WetContext) -> OpResult<T> {
         let start_time = Instant::now();
         
         // Use tokio's timeout mechanism (superior to Java's manual threading)
@@ -159,7 +159,7 @@ mod tests {
     
     #[async_trait]
     impl Op<i32> for SlowOp {
-        async fn perform(&self, _dry: &DryContext, _wet: &WetContext) -> OpResult<i32> {
+        async fn perform(&self, _dry: &mut DryContext, _wet: &mut WetContext) -> OpResult<i32> {
             tokio::time::sleep(Duration::from_millis(50)).await;
             Ok(42)
         }
@@ -171,13 +171,13 @@ mod tests {
     
     #[tokio::test]
     async fn test_timeout_wrapper_success() {
-        let dry = DryContext::new();
-        let wet = WetContext::new();
+        let mut dry = DryContext::new();
+        let mut wet = WetContext::new();
         
         let op = Box::new(SlowOp);
         
         let timeout_wrapper = TimeBoundWrapper::new(op, Duration::from_millis(200));
-        let result = timeout_wrapper.perform(&dry, &wet).await;
+        let result = timeout_wrapper.perform(&mut dry, &mut wet).await;
         
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), 42);
@@ -187,7 +187,7 @@ mod tests {
     
     #[async_trait]
     impl Op<i32> for VerySlowOp {
-        async fn perform(&self, _dry: &DryContext, _wet: &WetContext) -> OpResult<i32> {
+        async fn perform(&self, _dry: &mut DryContext, _wet: &mut WetContext) -> OpResult<i32> {
             tokio::time::sleep(Duration::from_millis(200)).await;
             Ok(42)
         }
@@ -199,13 +199,13 @@ mod tests {
     
     #[tokio::test]
     async fn test_timeout_wrapper_timeout() {
-        let dry = DryContext::new();
-        let wet = WetContext::new();
+        let mut dry = DryContext::new();
+        let mut wet = WetContext::new();
         
         let op = Box::new(VerySlowOp);
         
         let timeout_wrapper = TimeBoundWrapper::new(op, Duration::from_millis(50));
-        let result = timeout_wrapper.perform(&dry, &wet).await;
+        let result = timeout_wrapper.perform(&mut dry, &mut wet).await;
         
         assert!(result.is_err());
         match result.unwrap_err() {
@@ -220,7 +220,7 @@ mod tests {
     
     #[async_trait]
     impl Op<String> for StringOp {
-        async fn perform(&self, _dry: &DryContext, _wet: &WetContext) -> OpResult<String> {
+        async fn perform(&self, _dry: &mut DryContext, _wet: &mut WetContext) -> OpResult<String> {
             Ok("success".to_string())
         }
         
@@ -231,8 +231,8 @@ mod tests {
     
     #[tokio::test]
     async fn test_timeout_wrapper_with_name() {
-        let dry = DryContext::new();
-        let wet = WetContext::new();
+        let mut dry = DryContext::new();
+        let mut wet = WetContext::new();
         
         let op = Box::new(StringOp);
         
@@ -241,7 +241,7 @@ mod tests {
             Duration::from_millis(100),
             "TestOp".to_string()
         );
-        let result = timeout_wrapper.perform(&dry, &wet).await;
+        let result = timeout_wrapper.perform(&mut dry, &mut wet).await;
         
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), "success");
@@ -251,7 +251,7 @@ mod tests {
     
     #[async_trait]
     impl Op<i32> for IntOp {
-        async fn perform(&self, _dry: &DryContext, _wet: &WetContext) -> OpResult<i32> {
+        async fn perform(&self, _dry: &mut DryContext, _wet: &mut WetContext) -> OpResult<i32> {
             Ok(100)
         }
         
@@ -262,13 +262,13 @@ mod tests {
     
     #[tokio::test]
     async fn test_caller_name_wrapper() {
-        let dry = DryContext::new();
-        let wet = WetContext::new();
+        let mut dry = DryContext::new();
+        let mut wet = WetContext::new();
         
         let op = Box::new(IntOp);
         
         let timeout_wrapper = create_timeout_wrapper_with_caller_name(op, Duration::from_millis(100));
-        let result = timeout_wrapper.perform(&dry, &wet).await;
+        let result = timeout_wrapper.perform(&mut dry, &mut wet).await;
         
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), 100);
@@ -278,7 +278,7 @@ mod tests {
     
     #[async_trait]
     impl Op<String> for CompositeOp {
-        async fn perform(&self, _dry: &DryContext, _wet: &WetContext) -> OpResult<String> {
+        async fn perform(&self, _dry: &mut DryContext, _wet: &mut WetContext) -> OpResult<String> {
             Ok("logged and timed".to_string())
         }
         
@@ -290,8 +290,8 @@ mod tests {
     #[tokio::test]
     async fn test_logged_timeout_wrapper() {
         tracing_subscriber::fmt::try_init().ok();
-        let dry = DryContext::new();
-        let wet = WetContext::new();
+        let mut dry = DryContext::new();
+        let mut wet = WetContext::new();
         
         let op = Box::new(CompositeOp);
         
@@ -300,7 +300,7 @@ mod tests {
             Duration::from_millis(100), 
             "CompositeOp".to_string()
         );
-        let result = wrapped.perform(&dry, &wet).await;
+        let result = wrapped.perform(&mut dry, &mut wet).await;
         
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), "logged and timed");

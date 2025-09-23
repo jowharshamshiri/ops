@@ -51,7 +51,7 @@ struct DoubleNumberOp;
 
 #[async_trait]
 impl Op<i32> for DoubleNumberOp {
-    async fn perform(&self, dry: &DryContext, _wet: &WetContext) -> OpResult<i32> {
+    async fn perform(&self, dry: &mut DryContext, _wet: &mut WetContext) -> OpResult<i32> {
         let x: i32 = dry_require!(dry, x)?;
         Ok(x * 2)
     }
@@ -67,7 +67,7 @@ struct AddConfigOp;
 
 #[async_trait]
 impl Op<i32> for AddConfigOp {
-    async fn perform(&self, dry: &DryContext, wet: &WetContext) -> OpResult<i32> {
+    async fn perform(&self, dry: &mut DryContext, wet: &mut WetContext) -> OpResult<i32> {
         let x: i32 = dry_require!(dry, x)?;
         let config_service: Arc<ConfigService> = wet_require_ref!(wet, config_service)?;
         let config = config_service.get_config();
@@ -85,7 +85,7 @@ struct SaveToDatabaseOp;
 
 #[async_trait]
 impl Op<String> for SaveToDatabaseOp {
-    async fn perform(&self, dry: &DryContext, wet: &WetContext) -> OpResult<String> {
+    async fn perform(&self, dry: &mut DryContext, wet: &mut WetContext) -> OpResult<String> {
         let data: i32 = dry_require!(dry, data)?;
         let database: Arc<DatabaseService> = wet_require_ref!(wet, database)?;
         Ok(database.save(data))
@@ -102,7 +102,7 @@ struct IncrementCounterOp;
 
 #[async_trait]
 impl Op<i32> for IncrementCounterOp {
-    async fn perform(&self, dry: &DryContext, wet: &WetContext) -> OpResult<i32> {
+    async fn perform(&self, dry: &mut DryContext, wet: &mut WetContext) -> OpResult<i32> {
         let base: i32 = dry_require!(dry, base)?;
         let counter_service: Arc<CounterService> = wet_require_ref!(wet, counter_service)?;
         let counter = counter_service.get_counter();
@@ -139,7 +139,7 @@ async fn main() -> OpResult<()> {
     
     // Chain operations manually to show data flow
     let double_op = DoubleNumberOp;
-    let doubled = double_op.perform(&dry, &wet).await?;
+    let doubled = double_op.perform(&mut dry, &mut wet).await?;
     println!("After doubling {}: {}", x, doubled);
     
     // Update dry context with result for next op
@@ -147,7 +147,7 @@ async fn main() -> OpResult<()> {
     dry_put!(dry, x);
     
     let add_config_op = AddConfigOp;
-    let with_config = add_config_op.perform(&dry, &wet).await?;
+    let with_config = add_config_op.perform(&mut dry, &mut wet).await?;
     println!("After adding config: {}", with_config);
     
     // Save to database
@@ -155,7 +155,7 @@ async fn main() -> OpResult<()> {
     dry_put!(dry, data);
     
     let save_op = SaveToDatabaseOp;
-    let save_result = save_op.perform(&dry, &wet).await?;
+    let save_result = save_op.perform(&mut dry, &mut wet).await?;
     println!("Save result: {}\n", save_result);
 
     // Example 2: Only static values (simpler case)
@@ -164,7 +164,7 @@ async fn main() -> OpResult<()> {
     let x = 5;
     dry_put!(dry, x);
     
-    let result = DoubleNumberOp.perform(&dry, &wet).await?;
+    let result = DoubleNumberOp.perform(&mut dry, &mut wet).await?;
     println!("Doubled result: {}\n", result);
 
     // Example 3: Using services for lazy evaluation
@@ -174,11 +174,11 @@ async fn main() -> OpResult<()> {
     dry_put!(dry, base);
     
     // Counter service will increment each time it's called
-    let result = IncrementCounterOp.perform(&dry, &wet).await?;
+    let result = IncrementCounterOp.perform(&mut dry, &mut wet).await?;
     println!("Base + counter: {}", result);
     
     // Call again to show counter increment
-    let result2 = IncrementCounterOp.perform(&dry, &wet).await?;
+    let result2 = IncrementCounterOp.perform(&mut dry, &mut wet).await?;
     println!("Base + counter (incremented): {}\n", result2);
 
     // Example 4: Using the perform utility for automatic logging
@@ -187,7 +187,7 @@ async fn main() -> OpResult<()> {
     let x = 7;
     dry_put!(dry, x);
     
-    let result = perform(Box::new(DoubleNumberOp), &dry, &wet).await?;
+    let result = perform(Box::new(DoubleNumberOp), &mut dry, &mut wet).await?;
     println!("Logged result: {}\n", result);
 
     // Example 5: Demonstrate service reuse
@@ -197,7 +197,7 @@ async fn main() -> OpResult<()> {
         let base = i * 10;
         dry_put!(dry, base);
         
-        let result = IncrementCounterOp.perform(&dry, &wet).await?;
+        let result = IncrementCounterOp.perform(&mut dry, &mut wet).await?;
         println!("Iteration {}: {} + counter = {}", i, base, result);
     }
     

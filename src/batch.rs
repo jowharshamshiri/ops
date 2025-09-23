@@ -39,7 +39,7 @@ impl<T> Op<Vec<T>> for BatchOp<T>
 where
     T: Send + Sync + 'static,
 {
-    async fn perform(&self, dry: &DryContext, wet: &WetContext) -> OpResult<Vec<T>> {
+    async fn perform(&self, dry: &mut DryContext, wet: &mut WetContext) -> OpResult<Vec<T>> {
         let mut results = Vec::with_capacity(self.ops.len());
         let mut errors = Vec::new();
         
@@ -108,40 +108,15 @@ impl<T> Op<Vec<T>> for ParallelBatchOp<T>
 where
     T: Send + Sync + 'static,
 {
-    async fn perform(&self, dry: &DryContext, wet: &WetContext) -> OpResult<Vec<T>> {
-        use futures::future;
-        
-        let mut futures = Vec::new();
-        
-        for (index, op) in self.ops.iter().enumerate() {
-            let op = Arc::clone(op);
-            let dry_ctx = dry.clone();
-            
-            futures.push(async move {
-                let result = op.perform(&dry_ctx, wet).await;
-                (index, result)
-            });
-        }
-        
-        // Execute futures with optional concurrency limit
-        let results = if let Some(max_concurrent) = self.max_concurrent {
-            use futures::stream::{self, StreamExt};
-            stream::iter(futures)
-                .buffered(max_concurrent)
-                .collect::<Vec<_>>()
-                .await
-        } else {
-            future::join_all(futures).await
-        };
-        
-        let mut ordered_results: Vec<Option<T>> = (0..self.ops.len()).map(|_| None).collect();
+    async fn perform(&self, dry: &mut DryContext, wet: &mut WetContext) -> OpResult<Vec<T>> {
+        // Since contexts are mutable, we can't run ops in parallel
+        // Execute sequentially instead
+        let mut results = Vec::with_capacity(self.ops.len());
         let mut errors = Vec::new();
         
-        for (index, result) in results {
-            match result {
-                Ok(value) => {
-                    ordered_results[index] = Some(value);
-                },
+        for (index, op) in self.ops.iter().enumerate() {
+            match op.perform(dry, wet).await {
+                Ok(result) => results.push(result),
                 Err(error) => {
                     if self.continue_on_error {
                         errors.push((index, error));
@@ -150,16 +125,17 @@ where
                             format!("Op {} failed: {}", index, error)
                         ));
                     }
-                },
+                }
             }
         }
         
-        let final_results: Result<Vec<T>, _> = ordered_results
-            .into_iter()
-            .collect::<Option<Vec<T>>>()
-            .ok_or_else(|| OpError::BatchFailed("Missing results".to_string()));
-            
-        final_results
+        if !errors.is_empty() && !self.continue_on_error {
+            return Err(OpError::BatchFailed(
+                format!("Parallel batch op had {} errors", errors.len())
+            ));
+        }
+        
+        Ok(results)
     }
     
     fn metadata(&self) -> OpMetadata {
@@ -180,7 +156,7 @@ mod tests {
     
     #[async_trait]
     impl Op<i32> for TestOp {
-        async fn perform(&self, _dry: &DryContext, _wet: &WetContext) -> OpResult<i32> {
+        async fn perform(&self, _dry: &mut DryContext, _wet: &mut WetContext) -> OpResult<i32> {
             if self.should_fail {
                 Err(OpError::ExecutionFailed("Test failure".to_string()))
             } else {
@@ -201,10 +177,10 @@ mod tests {
         ];
         
         let batch = BatchOp::new(ops);
-        let dry = DryContext::new();
-        let wet = WetContext::new();
+        let mut dry = DryContext::new();
+        let mut wet = WetContext::new();
         
-        let results = batch.perform(&dry, &wet).await.unwrap();
+        let results = batch.perform(&mut dry, &mut wet).await.unwrap();
         assert_eq!(results, vec![1, 2]);
     }
     
@@ -216,10 +192,10 @@ mod tests {
         ];
         
         let batch = BatchOp::new(ops);
-        let dry = DryContext::new();
-        let wet = WetContext::new();
+        let mut dry = DryContext::new();
+        let mut wet = WetContext::new();
         
-        let result = batch.perform(&dry, &wet).await;
+        let result = batch.perform(&mut dry, &mut wet).await;
         assert!(result.is_err());
     }
     
@@ -231,10 +207,10 @@ mod tests {
         ];
         
         let batch = ParallelBatchOp::new(ops);
-        let dry = DryContext::new();
-        let wet = WetContext::new();
+        let mut dry = DryContext::new();
+        let mut wet = WetContext::new();
         
-        let results = batch.perform(&dry, &wet).await.unwrap();
+        let results = batch.perform(&mut dry, &mut wet).await.unwrap();
         assert_eq!(results.len(), 2);
         assert!(results.contains(&1));
         assert!(results.contains(&2));
