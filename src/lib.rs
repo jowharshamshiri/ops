@@ -1,4 +1,3 @@
-pub mod context;
 pub mod contexts;
 pub mod error;
 pub mod op;
@@ -9,12 +8,12 @@ pub mod ops;
 pub mod macros;
 pub mod loop_op;
 
-pub use context::{OpContext, HollowOpContext, RequirementFactory, ClosureFactory, ContextProvider};
 pub use contexts::{DryContext, WetContext};
 pub use error::OpError;
 pub use op::Op;
 pub use op_metadata::{OpMetadata, OpRequest, ValidationReport};
 pub use batch::BatchOp;
+pub use loop_op::LoopOp;
 pub use wrappers::logging::LoggingWrapper;
 pub use wrappers::timeout::TimeBoundWrapper;
 pub use ops::{perform, get_caller_op_name, wrap_nested_op_exception};
@@ -30,7 +29,7 @@ pub mod prelude {
 	
 	pub use crate::{
 		OpResult,
-		Op, OpContext, OpError, DryContext, WetContext, OpMetadata
+		Op, OpError, DryContext, WetContext, OpMetadata
 	};
 	pub use async_trait::async_trait;
 	pub use std::collections::{HashMap};

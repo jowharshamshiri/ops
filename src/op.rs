@@ -49,7 +49,7 @@ mod tests {
         
         #[async_trait]
         impl Op<String> for ContextUsingOp {
-            async fn perform(&self, dry: &DryContext, wet: &WetContext) -> OpResult<String> {
+            async fn perform(&self, dry: &DryContext, _wet: &WetContext) -> OpResult<String> {
                 let name = dry.get_required::<String>("name")?;
                 Ok(format!("Hello, {}!", name))
             }

@@ -1,14 +1,15 @@
-// Integration tests demonstrating complete Java compatibility
+// Integration tests demonstrating complete framework functionality
 // Tests end-to-end functionality with all implemented features
 
 use ops::{
-    OpContext, HollowOpContext, ContextProvider, Op, ClosureOp,
-    BatchOp, LoggingWrapper, TimeBoundWrapper, OpError,
+    DryContext, WetContext, Op, OpMetadata, OpError,
+    BatchOp, LoggingWrapper, TimeBoundWrapper,
     perform, get_caller_op_name, wrap_nested_op_exception,
 };
 use serde::{Serialize, Deserialize};
 use std::time::Duration;
 use std::sync::Arc;
+use async_trait::async_trait;
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 struct User {
@@ -18,23 +19,35 @@ struct User {
     active: bool,
 }
 
+struct FailingOp;
+
+#[async_trait]
+impl Op<String> for FailingOp {
+    async fn perform(&self, _dry: &DryContext, _wet: &WetContext) -> Result<String, OpError> {
+        Err(OpError::ExecutionFailed("Simulated failure".to_string()))
+    }
+    
+    fn metadata(&self) -> OpMetadata {
+        OpMetadata::builder("FailingOp")
+            .description("An op that always fails")
+            .build()
+    }
+}
+
 #[tokio::test]
 async fn test_error_handling_and_wrapper_chains() {
     tracing_subscriber::fmt::try_init().ok();
-    let mut context = OpContext::new();
+    let dry = DryContext::new();
+    let wet = WetContext::new();
     
     // Create op that will fail
-    let failing_op = Box::new(ClosureOp::new(|_ctx| {
-        Box::pin(async move {
-            Err(OpError::ExecutionFailed("Simulated failure".to_string()))
-        })
-    }));
+    let failing_op = Box::new(FailingOp);
     
     // Wrap with timeout and logging 
     let timeout_op: TimeBoundWrapper<String> = TimeBoundWrapper::with_name(failing_op, Duration::from_millis(50), "FailingOp".to_string());
     let logged_op = LoggingWrapper::new(Box::new(timeout_op), "TestFailure".to_string());
     
-    let result = logged_op.perform(&mut context).await;
+    let result = logged_op.perform(&dry, &wet).await;
     assert!(result.is_err());
     
     // Verify error wrapping with op context
@@ -44,31 +57,6 @@ async fn test_error_handling_and_wrapper_chains() {
         },
         _ => panic!("Expected wrapped ExecutionFailed error"),
     }
-}
-
-#[tokio::test] 
-async fn test_hollow_context_pattern() {
-    tracing_subscriber::fmt::try_init().ok();
-    
-    // Test HOLLOW context singleton
-    let hollow1 = HollowOpContext::HOLLOW;
-    let hollow2 = HollowOpContext::HOLLOW;
-    assert!(hollow1.is_hollow());
-    assert!(hollow2.is_hollow());
-    
-    // Test hollow context conversion
-    let mut hollow_context = HollowOpContext::new().to_context();
-    
-    // Ops should still work with hollow context (but with warnings)
-    let simple_op = ClosureOp::new(|_ctx| {
-        Box::pin(async move {
-            Ok("hollow_result".to_string())
-        })
-    });
-    
-    let result = simple_op.perform(&mut hollow_context).await;
-    assert!(result.is_ok());
-    assert_eq!(result.unwrap(), "hollow_result");
 }
 
 #[tokio::test]
@@ -92,62 +80,36 @@ async fn test_exception_wrapping_utilities() {
     }
 }
 
-#[tokio::test]
-async fn test_comprehensive_context_features() {
-    let mut context = OpContext::new();
-    
-    // Test fluent interface
-    context = context
-        .with("service", "user_service")
-        .with("version", "1.0")
-        .with("debug", true);
-        
-    // Test requirement factory with complex data
-    #[derive(Serialize, Deserialize, Clone)]
-    struct Config {
-        database_url: String,
-        timeout: u32,
+struct SlowOp;
+
+#[async_trait]
+impl Op<String> for SlowOp {
+    async fn perform(&self, _dry: &DryContext, _wet: &WetContext) -> Result<String, OpError> {
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        Ok("should_timeout".to_string())
     }
     
-    let config: Config = context.require_with("db_config", || {
-        Ok(Config {
-            database_url: "postgres://localhost:5432/test".to_string(),
-            timeout: 30,
-        })
-    }).unwrap();
-    
-    assert_eq!(config.database_url, "postgres://localhost:5432/test");
-    
-    // Verify caching - second call should return cached value
-    let config2: Config = context.require_with("db_config", || {
-        Ok(Config {
-            database_url: "should_not_be_used".to_string(),
-            timeout: 999,
-        })
-    }).unwrap();
-    
-    assert_eq!(config2.database_url, "postgres://localhost:5432/test"); // Still original
-    assert_eq!(config2.timeout, 30); // Still original
+    fn metadata(&self) -> OpMetadata {
+        OpMetadata::builder("SlowOp")
+            .description("An op that takes a long time")
+            .build()
+    }
 }
 
 #[tokio::test]
 async fn test_timeout_wrapper_functionality() {
     tracing_subscriber::fmt::try_init().ok();
-    let mut context = OpContext::new();
+    let dry = DryContext::new();
+    let wet = WetContext::new();
     
     // Create slow op
-    let slow_op = Box::new(ClosureOp::new(|_ctx| {
-        Box::pin(async move {
-            tokio::time::sleep(Duration::from_millis(200)).await;
-            Ok("should_timeout".to_string())
-        })
-    }));
+    let slow_op = Box::new(SlowOp);
     
     // Wrap with short timeout
     let timeout_op = TimeBoundWrapper::with_name(slow_op, Duration::from_millis(50), "SlowOp".to_string());
     let logged_timeout_op = LoggingWrapper::new(Box::new(timeout_op), "TimeoutTest".to_string());
     
-    let result = logged_timeout_op.perform(&mut context).await;
+    let result = logged_timeout_op.perform(&dry, &wet).await;
     assert!(result.is_err());
     
     match result.unwrap_err() {
@@ -156,4 +118,154 @@ async fn test_timeout_wrapper_functionality() {
         },
         _ => panic!("Expected wrapped timeout error"),
     }
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+struct Config {
+    database_url: String,
+    timeout: u32,
+}
+
+struct ConfigService;
+
+impl ConfigService {
+    async fn get_config(&self) -> Config {
+        Config {
+            database_url: "postgres://localhost:5432/test".to_string(),
+            timeout: 30,
+        }
+    }
+}
+
+struct ConfigOp;
+
+#[async_trait]
+impl Op<Config> for ConfigOp {
+    async fn perform(&self, _dry: &DryContext, wet: &WetContext) -> Result<Config, OpError> {
+        let config_service = wet.get_required::<ConfigService>("config_service")?;
+        Ok(config_service.get_config().await)
+    }
+    
+    fn metadata(&self) -> OpMetadata {
+        OpMetadata::builder("ConfigOp")
+            .description("Loads configuration from service")
+            .build()
+    }
+}
+
+#[tokio::test]
+async fn test_dry_and_wet_context_usage() {
+    let mut dry = DryContext::new();
+    dry.insert("service", "user_service");
+    dry.insert("version", "1.0");
+    dry.insert("debug", true);
+    
+    let config_service = ConfigService;
+    let wet = WetContext::new()
+        .with_ref("config_service", config_service);
+    
+    let config_op = ConfigOp;
+    let config = config_op.perform(&dry, &wet).await.unwrap();
+    
+    assert_eq!(config.database_url, "postgres://localhost:5432/test");
+    assert_eq!(config.timeout, 30);
+}
+
+struct UserOp;
+
+#[async_trait]
+impl Op<User> for UserOp {
+    async fn perform(&self, dry: &DryContext, _wet: &WetContext) -> Result<User, OpError> {
+        let user_id = dry.get_required::<u32>("user_id")?;
+        let name = dry.get_required::<String>("name")?;
+        let email = dry.get_required::<String>("email")?;
+        
+        Ok(User {
+            id: user_id,
+            name,
+            email,
+            active: true,
+        })
+    }
+    
+    fn metadata(&self) -> OpMetadata {
+        OpMetadata::builder("UserOp")
+            .description("Creates a user from context data")
+            .build()
+    }
+}
+
+#[tokio::test]
+async fn test_batch_ops() {
+    let dry = DryContext::new()
+        .with_value("user_id", 1u32)
+        .with_value("name", "John Doe")
+        .with_value("email", "john@example.com");
+    let wet = WetContext::new();
+    
+    let ops: Vec<Arc<dyn Op<User>>> = vec![
+        Arc::new(UserOp),
+        Arc::new(UserOp),
+    ];
+    
+    let batch_op = BatchOp::new(ops);
+    let results = batch_op.perform(&dry, &wet).await.unwrap();
+    
+    assert_eq!(results.len(), 2);
+    for user in results {
+        assert_eq!(user.id, 1);
+        assert_eq!(user.name, "John Doe");
+        assert_eq!(user.email, "john@example.com");
+    }
+}
+
+#[tokio::test]
+async fn test_wrapper_composition() {
+    let dry = DryContext::new();
+    let wet = WetContext::new();
+    
+    // Create a simple op that returns success
+    struct SimpleOp;
+    
+    #[async_trait]
+    impl Op<String> for SimpleOp {
+        async fn perform(&self, _dry: &DryContext, _wet: &WetContext) -> Result<String, OpError> {
+            Ok("success".to_string())
+        }
+        
+        fn metadata(&self) -> OpMetadata {
+            OpMetadata::builder("SimpleOp").build()
+        }
+    }
+    
+    // Wrap with both timeout and logging
+    let op = Box::new(SimpleOp);
+    let timeout_op = TimeBoundWrapper::new(op, Duration::from_secs(1));
+    let logged_op = LoggingWrapper::new(Box::new(timeout_op), "ComposedOp".to_string());
+    
+    let result = logged_op.perform(&dry, &wet).await.unwrap();
+    assert_eq!(result, "success");
+}
+
+#[tokio::test]
+async fn test_perform_utility() {
+    let dry = DryContext::new();
+    let wet = WetContext::new();
+    
+    struct AutoLoggedOp;
+    
+    #[async_trait]
+    impl Op<i32> for AutoLoggedOp {
+        async fn perform(&self, _dry: &DryContext, _wet: &WetContext) -> Result<i32, OpError> {
+            Ok(42)
+        }
+        
+        fn metadata(&self) -> OpMetadata {
+            OpMetadata::builder("AutoLoggedOp").build()
+        }
+    }
+    
+    // Use the perform utility function which adds automatic logging
+    let result = perform(Box::new(AutoLoggedOp), &dry, &wet).await.unwrap();
+    assert_eq!(result, 42);
 }
