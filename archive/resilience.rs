@@ -1,3 +1,4 @@
+use crate::prelude::*;
 // Advanced Resilience Patterns - Error Recovery Strategies
 // Enhanced ops framework with retry, circuit breaker, and fallback patterns
 
@@ -7,7 +8,6 @@ use crate::error::OpError;
 use async_trait::async_trait;
 use std::time::{Duration, Instant};
 use std::sync::{Arc, Mutex};
-use tracing::{warn, info, error};
 
 /// Retry strategy configuration
 #[derive(Debug, Clone)]
@@ -123,7 +123,7 @@ where
 {
     async fn perform(&self, context: &mut OpContext) -> Result<T, OpError> {
         let mut attempt = 0;
-        let mut last_error = None;
+        let mut _last_error = None;
 
         loop {
             tracing::info!("Attempting op '{}' (attempt {}/{})", 
@@ -137,7 +137,7 @@ where
                     return Ok(result);
                 },
                 Err(error) => {
-                    last_error = Some(error.clone());
+                    _last_error = Some(error.clone());
                     
                     if !self.should_retry(&error) {
                         tracing::warn!("Op '{}' failed with non-retryable error: {:?}", self.op_name, error);

@@ -1,3 +1,4 @@
+use crate::prelude::*;
 // Emergency Rollback Ops
 // Fast-path emergency rollback for critical failures
 

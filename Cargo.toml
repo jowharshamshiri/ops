@@ -7,6 +7,10 @@ license = "MIT"
 keywords = ["ops", "async", "execution", "framework"]
 categories = ["development-tools"]
 
+[features]
+default = []
+html-parsing = []
+
 
 
 [dependencies]
@@ -20,6 +24,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 paste = "1.0"
 anyhow = "1.0"
+llama-cpp-2 = "0.1"
 
 [dev-dependencies]
 tokio-test = "0.4"

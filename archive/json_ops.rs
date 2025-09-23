@@ -1,3 +1,4 @@
+use crate::prelude::*;
 // JSON op examples - equivalent to Java op/ directory
 // Implements DeserializeJsonOp and SerializeToJsonOp with serde_json
 

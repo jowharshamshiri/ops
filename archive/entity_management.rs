@@ -1,3 +1,4 @@
+use crate::prelude::*;
 // Entity Management Ops
 // Core CRUD ops for entities with state tracking and rollback support
 

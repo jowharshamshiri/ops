@@ -1,3 +1,4 @@
+use crate::prelude::*;
 // TimeBoundWrapper implementation with full Java reference functionality
 // Superior implementation using tokio::time::timeout vs Java's unsafe threading
 
