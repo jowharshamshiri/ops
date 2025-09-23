@@ -3,7 +3,7 @@ use crate::prelude::*;
 // Implements LoggingOpWrapper.java patterns with Rust enhancements
 
 use crate::op::Op;
-use crate::context::OpContext;
+use crate::{DryContext, WetContext, OpMetadata};
 use crate::error::OpError;
 use async_trait::async_trait;
 use tracing;
@@ -90,14 +90,14 @@ impl<T> Op<T> for LoggingWrapper<T>
 where
     T: Send + 'static,
 {
-    async fn perform(&self, context: &mut OpContext) -> Result<T, OpError> {
+    async fn perform(&self, dry: &DryContext, wet: &WetContext) -> OpResult<T> {
         let start_time = Instant::now();
         
         // Log op start with yellow color
         self.log_op_start();
         
         // Execute wrapped op
-        let result = self.wrapped_op.perform(context).await;
+        let result = self.wrapped_op.perform(dry, wet).await;
         
         let duration = start_time.elapsed();
         
@@ -114,6 +114,11 @@ where
         
         result
     }
+    
+    fn metadata(&self) -> OpMetadata {
+        // Pass through metadata from wrapped op
+        self.wrapped_op.metadata()
+    }
 }
 
 /// Create logger with dynamic name based on caller context
@@ -129,40 +134,61 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::op::{Op, ClosureOp};
-    use crate::context::OpContext;
+    use crate::op::Op;
 
+    struct TestOp;
+    
+    #[async_trait]
+    impl Op<i32> for TestOp {
+        async fn perform(&self, _dry: &DryContext, _wet: &WetContext) -> OpResult<i32> {
+            Ok(42)
+        }
+        
+        fn metadata(&self) -> OpMetadata {
+            OpMetadata::builder("TestOp").build()
+        }
+    }
+    
     #[tokio::test]
     async fn test_logging_wrapper_success() {
         tracing_subscriber::fmt::try_init().ok(); // Initialize tracing for tests
         
-        let mut context = OpContext::new();
+        let dry = DryContext::new();
+        let wet = WetContext::new();
         
-        let op = Box::new(ClosureOp::new(|_ctx| {
-            Box::pin(async move { Ok(42) })
-        }));
+        let op = Box::new(TestOp);
         
         let logging_wrapper = LoggingWrapper::new(op, "TestOp".to_string());
-        let result = logging_wrapper.perform(&mut context).await;
+        let result = logging_wrapper.perform(&dry, &wet).await;
         
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), 42);
     }
 
+    struct FailingOp;
+    
+    #[async_trait]
+    impl Op<i32> for FailingOp {
+        async fn perform(&self, _dry: &DryContext, _wet: &WetContext) -> OpResult<i32> {
+            Err(OpError::ExecutionFailed("test error".to_string()))
+        }
+        
+        fn metadata(&self) -> OpMetadata {
+            OpMetadata::builder("FailingOp").build()
+        }
+    }
+    
     #[tokio::test]
     async fn test_logging_wrapper_failure() {
         tracing_subscriber::fmt::try_init().ok();
         
-        let mut context = OpContext::new();
+        let dry = DryContext::new();
+        let wet = WetContext::new();
         
-        let op = Box::new(ClosureOp::new(|_ctx| {
-            Box::pin(async move { 
-                Err(OpError::ExecutionFailed("test error".to_string())) 
-            })
-        }));
+        let op = Box::new(FailingOp);
         
         let logging_wrapper: LoggingWrapper<i32> = LoggingWrapper::new(op, "FailingOp".to_string());
-        let result = logging_wrapper.perform(&mut context).await;
+        let result = logging_wrapper.perform(&dry, &wet).await;
         
         assert!(result.is_err());
         match result.unwrap_err() {
@@ -173,16 +199,28 @@ mod tests {
         }
     }
 
+    struct StringOp;
+    
+    #[async_trait]
+    impl Op<String> for StringOp {
+        async fn perform(&self, _dry: &DryContext, _wet: &WetContext) -> OpResult<String> {
+            Ok("test".to_string())
+        }
+        
+        fn metadata(&self) -> OpMetadata {
+            OpMetadata::builder("StringOp").build()
+        }
+    }
+    
     #[tokio::test]
     async fn test_context_aware_logger() {
-        let mut context = OpContext::new();
+        let dry = DryContext::new();
+        let wet = WetContext::new();
         
-        let op = Box::new(ClosureOp::new(|_ctx| {
-            Box::pin(async move { Ok("test".to_string()) })
-        }));
+        let op = Box::new(StringOp);
         
         let logging_wrapper = create_context_aware_logger(op);
-        let result = logging_wrapper.perform(&mut context).await;
+        let result = logging_wrapper.perform(&dry, &wet).await;
         
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), "test");

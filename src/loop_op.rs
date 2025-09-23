@@ -1,6 +1,6 @@
 use crate::prelude::*;
 use async_trait::async_trait;
-use crate::{Op, OpContext, OpError};
+use crate::{Op, DryContext, WetContext, OpMetadata};
 
 /// Loop operation that executes a batch of operations repeatedly until a limit is reached
 pub struct LoopOp<T> {
@@ -33,14 +33,14 @@ where
         self
     }
 
-    /// Get the current counter value from context
-    fn get_counter(&self, context: &OpContext) -> usize {
-        context.get::<usize>(&self.counter_var).unwrap_or(0)
+    /// Get the current counter value from dry context
+    fn get_counter(&self, dry: &DryContext) -> usize {
+        dry.get::<usize>(&self.counter_var).unwrap_or(0)
     }
 
-    /// Set the counter value in context
-    fn set_counter(&self, context: &mut OpContext, value: usize) -> Result<(), OpError> {
-        context.put(&self.counter_var, value)
+    /// Set the counter value in dry context
+    fn set_counter(&self, dry: &mut DryContext, value: usize) {
+        dry.insert(&self.counter_var, value);
     }
 }
 
@@ -49,35 +49,41 @@ impl<T> Op<Vec<T>> for LoopOp<T>
 where
     T: Send + 'static,
 {
-    async fn perform(&self, context: &mut OpContext) -> Result<Vec<T>, OpError> {
+    async fn perform(&self, dry: &DryContext, wet: &WetContext) -> OpResult<Vec<T>> {
         let mut results = Vec::new();
-        let mut counter = self.get_counter(context);
+        let mut working_dry = dry.clone();
+        let mut counter = self.get_counter(&working_dry);
 
         // Initialize counter in context if it doesn't exist
-        if !context.contains_key(&self.counter_var) {
-            self.set_counter(context, counter)?;
+        if !working_dry.contains(&self.counter_var) {
+            self.set_counter(&mut working_dry, counter);
         }
 
         while counter < self.limit {
             // Execute all operations in the batch for this iteration
             for op in &self.ops {
-                let result = op.perform(context).await?;
+                let result = op.perform(&working_dry, wet).await?;
                 results.push(result);
             }
 
             // Increment counter and update context
             counter += 1;
-            self.set_counter(context, counter)?;
+            self.set_counter(&mut working_dry, counter);
         }
 
         Ok(results)
+    }
+    
+    fn metadata(&self) -> OpMetadata {
+        OpMetadata::builder("LoopOp")
+            .description(format!("Loop {} times over {} ops", self.limit, self.ops.len()))
+            .build()
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::OpContext;
 
     struct TestOp {
         value: i32,
@@ -85,8 +91,12 @@ mod tests {
 
     #[async_trait]
     impl Op<i32> for TestOp {
-        async fn perform(&self, _context: &mut OpContext) -> Result<i32, OpError> {
+        async fn perform(&self, _dry: &DryContext, _wet: &WetContext) -> OpResult<i32> {
             Ok(self.value)
+        }
+        
+        fn metadata(&self) -> OpMetadata {
+            OpMetadata::builder("TestOp").build()
         }
     }
 
@@ -94,15 +104,20 @@ mod tests {
 
     #[async_trait]
     impl Op<usize> for CounterOp {
-        async fn perform(&self, context: &mut OpContext) -> Result<usize, OpError> {
-            let counter: usize = context.get("loop_counter").unwrap_or(0);
+        async fn perform(&self, dry: &DryContext, _wet: &WetContext) -> OpResult<usize> {
+            let counter: usize = dry.get("loop_counter").unwrap_or(0);
             Ok(counter)
+        }
+        
+        fn metadata(&self) -> OpMetadata {
+            OpMetadata::builder("CounterOp").build()
         }
     }
 
     #[tokio::test]
     async fn test_loop_op_basic() {
-        let mut ctx = OpContext::new();
+        let dry = DryContext::new();
+        let wet = WetContext::new();
         
         let ops: Vec<Box<dyn Op<i32>>> = vec![
             Box::new(TestOp { value: 10 }),
@@ -110,64 +125,60 @@ mod tests {
         ];
 
         let loop_op = LoopOp::new("loop_counter".to_string(), 3, ops);
-        let results = loop_op.perform(&mut ctx).await.unwrap();
+        let results = loop_op.perform(&dry, &wet).await.unwrap();
 
         // Should have 6 results (2 ops * 3 iterations)
         assert_eq!(results.len(), 6);
         assert_eq!(results, vec![10, 20, 10, 20, 10, 20]);
-
-        // Counter should be 3
-        assert_eq!(ctx.get::<usize>("loop_counter"), Some(3));
     }
 
     #[tokio::test]
     async fn test_loop_op_with_counter_access() {
-        let mut ctx = OpContext::new();
+        let dry = DryContext::new();
+        let wet = WetContext::new();
         
         let ops: Vec<Box<dyn Op<usize>>> = vec![
             Box::new(CounterOp),
         ];
 
         let loop_op = LoopOp::new("loop_counter".to_string(), 3, ops);
-        let results = loop_op.perform(&mut ctx).await.unwrap();
+        let results = loop_op.perform(&dry, &wet).await.unwrap();
 
         // Should have counter values: [0, 1, 2]
         assert_eq!(results, vec![0, 1, 2]);
-        assert_eq!(ctx.get::<usize>("loop_counter"), Some(3));
     }
 
     #[tokio::test]
     async fn test_loop_op_existing_counter() {
-        let mut ctx = OpContext::new();
-        ctx.put("my_counter", 2_usize).unwrap();
+        let dry = DryContext::new().with_value("my_counter", 2_usize);
+        let wet = WetContext::new();
         
         let ops: Vec<Box<dyn Op<i32>>> = vec![
             Box::new(TestOp { value: 42 }),
         ];
 
         let loop_op = LoopOp::new("my_counter".to_string(), 4, ops);
-        let results = loop_op.perform(&mut ctx).await.unwrap();
+        let results = loop_op.perform(&dry, &wet).await.unwrap();
 
         // Should execute 2 times (from 2 to 4)
         assert_eq!(results.len(), 2);
         assert_eq!(results, vec![42, 42]);
-        assert_eq!(ctx.get::<usize>("my_counter"), Some(4));
     }
 
     #[tokio::test]
     async fn test_loop_op_zero_limit() {
-        let mut ctx = OpContext::new();
+        let dry = DryContext::new();
+        let wet = WetContext::new();
         
         let ops: Vec<Box<dyn Op<i32>>> = vec![
             Box::new(TestOp { value: 99 }),
         ];
 
         let loop_op = LoopOp::new("counter".to_string(), 0, ops);
-        let results = loop_op.perform(&mut ctx).await.unwrap();
+        let results = loop_op.perform(&dry, &wet).await.unwrap();
 
         // Should not execute any operations
         assert_eq!(results.len(), 0);
-        assert_eq!(ctx.get::<usize>("counter"), Some(0));
     }
 
     #[tokio::test]

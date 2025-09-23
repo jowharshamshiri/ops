@@ -1,29 +1,19 @@
 use crate::prelude::*;
 use async_trait::async_trait;
-use crate::{OpContext, OpError};
-use std::pin::Pin;
-use std::future::Future;
+use crate::{DryContext, WetContext, OpMetadata};
 
 #[async_trait]
 pub trait Op<T>: Send + Sync {
-    async fn perform(&self, context: &mut OpContext) -> Result<T, OpError>;
+    async fn perform(&self, dry: &DryContext, wet: &WetContext) -> OpResult<T>;
+    
+    fn metadata(&self) -> OpMetadata;
 }
 
-#[async_trait]
-impl<T, F, Fut> Op<T> for F
-where
-    F: Fn(&mut OpContext) -> Fut + Send + Sync,
-    Fut: std::future::Future<Output = Result<T, OpError>> + Send,
-    T: Send,
-{
-    async fn perform(&self, context: &mut OpContext) -> Result<T, OpError> {
-        self(context).await
-    }
-}
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
     
     struct TestOp {
         value: i32,
@@ -31,57 +21,59 @@ mod tests {
     
     #[async_trait]
     impl Op<i32> for TestOp {
-        async fn perform(&self, _context: &mut OpContext) -> Result<i32, OpError> {
+        async fn perform(&self, _dry: &DryContext, _wet: &WetContext) -> OpResult<i32> {
             Ok(self.value)
+        }
+        
+        fn metadata(&self) -> OpMetadata {
+            OpMetadata::builder("TestOp")
+                .description("Simple test op")
+                .output_schema(json!({ "type": "integer" }))
+                .build()
         }
     }
     
     #[tokio::test]
     async fn test_op_execution() {
         let op = TestOp { value: 42 };
-        let mut ctx = OpContext::new();
+        let dry = DryContext::new();
+        let wet = WetContext::new();
         
-        let result = op.perform(&mut ctx).await;
+        let result = op.perform(&dry, &wet).await;
         assert_eq!(result.unwrap(), 42);
     }
     
     #[tokio::test]
-    async fn test_closure_op() {
-        let mut ctx = OpContext::new();
+    async fn test_op_with_contexts() {
+        struct ContextUsingOp;
         
-        let op = |_ctx: &mut OpContext| async move {
-            Ok::<i32, OpError>(123)
-        };
+        #[async_trait]
+        impl Op<String> for ContextUsingOp {
+            async fn perform(&self, dry: &DryContext, wet: &WetContext) -> OpResult<String> {
+                let name = dry.get_required::<String>("name")?;
+                Ok(format!("Hello, {}!", name))
+            }
+            
+            fn metadata(&self) -> OpMetadata {
+                OpMetadata::builder("ContextUsingOp")
+                    .input_schema(json!({
+                        "type": "object",
+                        "properties": {
+                            "name": { "type": "string" }
+                        },
+                        "required": ["name"]
+                    }))
+                    .output_schema(json!({ "type": "string" }))
+                    .build()
+            }
+        }
         
-        let result = op.perform(&mut ctx).await;
-        assert_eq!(result.unwrap(), 123);
+        let op = ContextUsingOp;
+        let dry = DryContext::new().with_value("name", "World");
+        let wet = WetContext::new();
+        
+        let result = op.perform(&dry, &wet).await;
+        assert_eq!(result.unwrap(), "Hello, World!");
     }
-}
-
-/// Closure-based op implementation for testing and simple use cases
-pub struct ClosureOp<T, F> 
-where 
-    F: Fn(&mut OpContext) -> Pin<Box<dyn Future<Output = Result<T, OpError>> + Send>> + Send + Sync,
-{
-    closure: F,
-}
-
-impl<T, F> ClosureOp<T, F>
-where 
-    F: Fn(&mut OpContext) -> Pin<Box<dyn Future<Output = Result<T, OpError>> + Send>> + Send + Sync,
-{
-    pub fn new(closure: F) -> Self {
-        Self { closure }
-    }
-}
-
-#[async_trait]
-impl<T, F> Op<T> for ClosureOp<T, F>
-where
-    T: Send + 'static,
-    F: Fn(&mut OpContext) -> Pin<Box<dyn Future<Output = Result<T, OpError>> + Send>> + Send + Sync,
-{
-    async fn perform(&self, context: &mut OpContext) -> Result<T, OpError> {
-        (self.closure)(context).await
-    }
+    
 }

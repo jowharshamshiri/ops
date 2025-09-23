@@ -3,14 +3,13 @@ use crate::prelude::*;
 // Implements Java OPS class functionality with Rust enhancements
 
 use crate::op::Op;
-use crate::context::OpContext;
-use crate::error::OpError;
+use crate::{DryContext, WetContext, OpError};
 use crate::wrappers::logging::LoggingWrapper;
 use std::panic::Location;
 
 /// Central execution function with automatic logging wrapper
 /// Equivalent to Java OPS.perform() method
-pub async fn perform<T>(op: Box<dyn Op<T>>, context: &mut OpContext) -> Result<T, OpError>
+pub async fn perform<T>(op: Box<dyn Op<T>>, dry: &DryContext, wet: &WetContext) -> OpResult<T>
 where
     T: Send + 'static,
 {
@@ -21,7 +20,7 @@ where
     let logged_op = LoggingWrapper::new(op, op_name);
     
     // Execute with logging
-    logged_op.perform(context).await
+    logged_op.perform(dry, wet).await
 }
 
 /// Stack trace analysis to get caller class name
@@ -72,17 +71,28 @@ pub fn wrap_runtime_exception(error: Box<dyn std::error::Error + Send + Sync>) -
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::op::ClosureOp;
+    
+    struct TestOp;
+    
+    #[async_trait]
+    impl Op<i32> for TestOp {
+        async fn perform(&self, _dry: &DryContext, _wet: &WetContext) -> OpResult<i32> {
+            Ok(42)
+        }
+        
+        fn metadata(&self) -> OpMetadata {
+            OpMetadata::builder("TestOp").build()
+        }
+    }
 
     #[tokio::test]
     async fn test_perform_with_auto_logging() {
-        let mut context = OpContext::new();
+        let dry = DryContext::new();
+        let wet = WetContext::new();
         
-        let op = Box::new(ClosureOp::new(|_ctx| {
-            Box::pin(async move { Ok(42) })
-        }));
+        let op = Box::new(TestOp);
         
-        let result = perform(op, &mut context).await;
+        let result = perform(op, &dry, &wet).await;
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), 42);
     }
