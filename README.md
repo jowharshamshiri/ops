@@ -32,7 +32,7 @@ struct GreetingOp;
 
 #[async_trait]
 impl Op<String> for GreetingOp {
-    async fn perform(&self, dry: &DryContext, _wet: &WetContext) -> Result<String, ops::OpError> {
+    async fn perform(&self, dry: &mut DryContext, _wet: &mut WetContext) -> Result<String, ops::OpError> {
         let name = dry.get_required::<String>("name")?;
         Ok(format!("Hello, {}!", name))
     }
@@ -46,11 +46,11 @@ impl Op<String> for GreetingOp {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let dry = DryContext::new().with_value("name", "World");
-    let wet = WetContext::new();
+    let mut dry = DryContext::new().with_value("name", "World");
+    let mut wet = WetContext::new();
     
     let op = Box::new(GreetingOp);
-    let result = perform(op, &dry, &wet).await?;
+    let result = perform(op, &mut dry, &mut wet).await?;
     println!("{}", result);
     
     Ok(())
@@ -84,11 +84,11 @@ let ops: Vec<Arc<dyn Op<String>>> = vec![
     Arc::new(GreetingOp),
 ];
 
-let dry = DryContext::new().with_value("name", "Alice");
-let wet = WetContext::new();
+let mut dry = DryContext::new().with_value("name", "Alice");
+let mut wet = WetContext::new();
 
 let batch = BatchOp::new(ops);
-let results = batch.perform(&dry, &wet).await?;
+let results = batch.perform(&mut dry, &mut wet).await?;
 ```
 
 ## Architecture
@@ -125,6 +125,7 @@ let db: Arc<Database> = wet_require_ref!(wet, database)?;
 ```
 
 Available macros:
+
 - `dry_put!`, `dry_get!`, `dry_require!`, `dry_result!`
 - `wet_put_ref!`, `wet_put_arc!`, `wet_get_ref!`, `wet_require_ref!`
 
