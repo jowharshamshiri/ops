@@ -1,111 +1,213 @@
-use ops::{OpError, OpResult, execute_ops, op, perform};
-use serde_json::json;
+use ops::prelude::*;
+use ops::{dry_put, dry_get, dry_require, dry_result, perform};
 
-// Define some ops that can work in a daisy chain
-op!(double_number(x: i32) -> i32 {
-    Ok(x * 2)
-});
+// Define ops that can work in a daisy chain
+struct DoubleNumberOp;
 
-op!(add_ten(x: i32) -> i32 {
-    Ok(x + 10)
-});
+#[async_trait]
+impl Op<i32> for DoubleNumberOp {
+    async fn perform(&self, dry: &DryContext, _wet: &WetContext) -> OpResult<i32> {
+        let x: i32 = dry_require!(dry, x)?;
+        Ok(x * 2)
+    }
+    
+    fn metadata(&self) -> OpMetadata {
+        OpMetadata::builder("DoubleNumberOp")
+            .description("Doubles a number")
+            .build()
+    }
+}
 
-op!(format_result(x: i32) -> String {
-    Ok(format!("Final result: {}", x))
-});
+struct AddTenOp;
 
-op!(greet_person(name: String) -> String {
-    Ok(format!("Hello, {}!", name))
-});
+#[async_trait]
+impl Op<i32> for AddTenOp {
+    async fn perform(&self, dry: &DryContext, _wet: &WetContext) -> OpResult<i32> {
+        // Try to get from "result" first (for chaining), then from "x"
+        let x: i32 = if let Some(result) = dry_get!(dry, result) {
+            result
+        } else {
+            dry_require!(dry, x)?
+        };
+        Ok(x + 10)
+    }
+    
+    fn metadata(&self) -> OpMetadata {
+        OpMetadata::builder("AddTenOp")
+            .description("Adds 10 to a number")
+            .build()
+    }
+}
 
-op!(append_suffix(text: String) -> String {
-    Ok(format!("{} Have a great day!", text))
-});
+struct FormatResultOp;
 
-// Op that can reference a specific previous op by name
-op!(use_double_result(doubled_value: i32) -> String {
-    Ok(format!("The doubled value was: {}", doubled_value))
-});
+#[async_trait]
+impl Op<String> for FormatResultOp {
+    async fn perform(&self, dry: &DryContext, _wet: &WetContext) -> OpResult<String> {
+        let x: i32 = if let Some(result) = dry_get!(dry, result) {
+            result
+        } else {
+            dry_require!(dry, x)?
+        };
+        Ok(format!("Final result: {}", x))
+    }
+    
+    fn metadata(&self) -> OpMetadata {
+        OpMetadata::builder("FormatResultOp")
+            .description("Formats a number as a string")
+            .build()
+    }
+}
+
+struct GreetPersonOp;
+
+#[async_trait]
+impl Op<String> for GreetPersonOp {
+    async fn perform(&self, dry: &DryContext, _wet: &WetContext) -> OpResult<String> {
+        let name: String = dry_require!(dry, name)?;
+        Ok(format!("Hello, {}!", name))
+    }
+    
+    fn metadata(&self) -> OpMetadata {
+        OpMetadata::builder("GreetPersonOp")
+            .description("Greets a person by name")
+            .build()
+    }
+}
+
+struct AppendSuffixOp;
+
+#[async_trait]
+impl Op<String> for AppendSuffixOp {
+    async fn perform(&self, dry: &DryContext, _wet: &WetContext) -> OpResult<String> {
+        let text: String = if let Some(result) = dry_get!(dry, result) {
+            result
+        } else {
+            dry_require!(dry, text)?
+        };
+        Ok(format!("{} Have a great day!", text))
+    }
+    
+    fn metadata(&self) -> OpMetadata {
+        OpMetadata::builder("AppendSuffixOp")
+            .description("Appends a suffix to text")
+            .build()
+    }
+}
+
+// Helper function to chain operations by storing results
+async fn chain_ops<T: Send + Serialize + Clone>(
+    mut dry: DryContext,
+    wet: &WetContext,
+    ops: Vec<Box<dyn Op<T>>>,
+) -> OpResult<T> {
+    let mut last_result = None;
+    
+    for op in ops {
+        let result = op.perform(&dry, wet).await?;
+        
+        // Store result for next op to potentially use
+        dry_result!(dry, "op_result", result.clone());
+        last_result = Some(result);
+    }
+    
+    last_result.ok_or_else(|| OpError::ExecutionFailed("No ops provided".to_string()))
+}
 
 #[tokio::main]
 async fn main() -> OpResult<()> {
     tracing_subscriber::fmt::init();
+    println!("=== Testing Daisy Chain Ops with Dry/Wet Contexts ===\n");
 
-    println!("=== Testing Daisy Chain Ops ===\n");
+    let wet = WetContext::new(); // No services needed for this demo
 
-    // Example 1: Simple number processing chain using "result" daisy chaining
+    // Example 1: Simple number processing chain
     println!("1. Number processing chain: 5 -> double -> add 10 -> format");
-    let context = perform!(
-        [("x", json!(5))],
-        DoubleNumber,    // Takes x=5, outputs 10, stores as "DoubleNumber" and "result"
-        AddTen,          // Takes x from "result"=10, outputs 20, stores as "AddTen" and "result"
-        FormatResult     // Takes x from "result"=20, outputs "Final result: 20"
-    ).await?;
     
-    if let Some(result) = context.get_raw("result") {
-        println!("Final result: {}\n", result.as_str().unwrap_or("error"));
-    }
+    let mut dry = DryContext::new();
+    let x = 5;
+    dry_put!(dry, x);
+    
+    // Execute first op
+    let double_op = DoubleNumberOp;
+    let doubled = double_op.perform(&dry, &wet).await?;
+    println!("After doubling: {}", doubled);
+    
+    // Store result and continue chain
+    let result = doubled;
+    dry_put!(dry, result);
+    
+    let add_op = AddTenOp;
+    let added = add_op.perform(&dry, &wet).await?;
+    println!("After adding 10: {}", added);
+    
+    // Store and format
+    let result = added;
+    dry_put!(dry, result);
+    
+    let format_op = FormatResultOp;
+    let formatted = format_op.perform(&dry, &wet).await?;
+    println!("Final result: {}\n", formatted);
 
-    // Example 2: Text processing chain using "result" daisy chaining
+    // Example 2: Text processing chain
     println!("2. Text processing chain: World -> greet -> append suffix");
-    let context = perform!(
-        [("name", json!("World"))],
-        GreetPerson,     // Takes name="World", outputs "Hello, World!", stores as "GreetPerson" and "result"
-        AppendSuffix     // Takes text from "result", outputs "Hello, World! Have a great day!"
-    ).await?;
     
-    if let Some(result) = context.get_raw("result") {
-        println!("Final result: {}\n", result.as_str().unwrap_or("error"));
-    }
-
-    // Example 3: Multiple operations with named results
-    println!("3. Multiple operations storing named results:");
-    let context = perform!(
-        [("x", json!(7))],
-        DoubleNumber,        // Stores result as "DoubleNumber" (14)
-        AddTen,              // Uses "result" (14), stores as "AddTen" (24)  
-        FormatResult         // Uses "result" (24), stores formatted result
-    ).await?;
+    let mut dry = DryContext::new();
+    let name = "World".to_string();
+    dry_put!(dry, name);
     
-    if let Some(result) = context.get_raw("result") {
-        println!("Result: {}\n", result.as_str().unwrap_or("error"));
-    }
-
-    // Example 4: Show all stored values
-    println!("4. All stored values in context:");
-    let context = perform!(
-        [("x", json!(3))],
-        DoubleNumber,
-        AddTen
-    ).await?;
+    let greet_op = GreetPersonOp;
+    let greeting = greet_op.perform(&dry, &wet).await?;
+    println!("After greeting: {}", greeting);
     
-    println!("DoubleNumber result: {}", 
-        context.get_raw("DoubleNumber").unwrap().as_i64().unwrap_or(0));
-    println!("AddTen result: {}", 
-        context.get_raw("AddTen").unwrap().as_i64().unwrap_or(0));
-    println!("Latest result: {}\n", 
-        context.get_raw("result").unwrap().as_i64().unwrap_or(0));
+    // Store result for next op
+    let result = greeting;
+    dry_put!(dry, result);
+    
+    let suffix_op = AppendSuffixOp;
+    let final_text = suffix_op.perform(&dry, &wet).await?;
+    println!("Final result: {}\n", final_text);
 
-    // Example 5: Error handling - missing input
-    println!("5. Error handling - missing input:");
-    match perform!(
-        [("wrong_key", json!(10))],  // x is missing, result is missing
-        DoubleNumber
-    ).await {
+    // Example 3: Using the perform utility for automatic logging
+    println!("3. Using perform utility with logging:");
+    
+    let mut dry = DryContext::new();
+    let x = 7;
+    dry_put!(dry, x);
+    
+    let result = perform(Box::new(DoubleNumberOp), &dry, &wet).await?;
+    println!("Doubled result: {}", result);
+    
+    // Example 4: Error handling - missing input
+    println!("\n4. Error handling - missing input:");
+    let empty_dry = DryContext::new();
+    
+    match DoubleNumberOp.perform(&empty_dry, &wet).await {
         Ok(_) => println!("Unexpected success"),
-        Err(e) => println!("Expected error: {}\n", e),
+        Err(e) => println!("Expected error: {}", e),
     }
-
-    // Example 6: Using execute_ops for simple one-liner
-    println!("6. Ultra-simple syntax with execute_ops:");
-    let result = execute_ops!(
-        [("x", json!(4))],
-        DoubleNumber,
-        AddTen
-    ).await?;
     
-    if let Some(value) = result {
-        println!("Result: {}", value.as_i64().unwrap_or(0));
+    // Example 5: Demonstrate dry_get for optional chaining
+    println!("\n5. Optional chaining with dry_get:");
+    
+    let mut dry = DryContext::new();
+    // Don't set x, but set result to see fallback behavior
+    let result = 15;
+    dry_put!(dry, result);
+    
+    let add_result = AddTenOp.perform(&dry, &wet).await?;
+    println!("Using 'result' value (15) + 10 = {}", add_result);
+    
+    // Example 6: Show all available metadata
+    println!("\n6. Op Metadata:");
+    let ops: Vec<Box<dyn Op<i32>>> = vec![
+        Box::new(DoubleNumberOp),
+        Box::new(AddTenOp),
+    ];
+    
+    for op in ops {
+        let metadata = op.metadata();
+        println!("- {}: {}", metadata.name, metadata.description.unwrap_or("No description".to_string()));
     }
 
     Ok(())

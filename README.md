@@ -1,20 +1,18 @@
 # Ops - Rust Ops Framework
 
-Rust ops framework with composable wrappers and batch execution. Async op patterns with context management.
+Rust ops framework with dry/wet context separation and deferred execution.
 
 ## Features
 
-- Async-first design built on tokio
-- Resilience patterns: retry strategies, circuit breakers, fallback
-- Metrics collection with percentiles
-- Composable op decorators
-- Resource management with automatic cleanup
-- Test coverage: 74 tests with high pass rate
-- Memory safety with compile-time checks
+- **Dry/Wet Context separation** - serializable data vs runtime references
+- **Op metadata and schema validation** for inputs, references, and outputs
+- **Deferred execution** - save op requests for later execution
+- **Composable wrappers** - logging and timeout decorators
+- **Batch operations** - sequential and parallel execution
+- **Ergonomic macros** - context access patterns
+- **Memory safety** with zero-cost abstractions
 
 ## Quick Start
-
-### Installation
 
 Add to your `Cargo.toml`:
 
@@ -30,7 +28,6 @@ tokio = { version = "1.0", features = ["full"] }
 use ops::{Op, DryContext, WetContext, OpMetadata, perform};
 use async_trait::async_trait;
 
-// Define a simple op
 struct GreetingOp;
 
 #[async_trait]
@@ -52,7 +49,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let dry = DryContext::new().with_value("name", "World");
     let wet = WetContext::new();
     
-    // Execute with automatic logging and error handling
     let op = Box::new(GreetingOp);
     let result = perform(op, &dry, &wet).await?;
     println!("{}", result);
@@ -67,7 +63,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 use ops::{LoggingWrapper, TimeBoundWrapper, DryContext, WetContext};
 use std::time::Duration;
 
-// Compose wrappers for enhanced functionality
 let op = Box::new(GreetingOp);
 let timeout_op = TimeBoundWrapper::new(op, Duration::from_secs(5));
 let logged_op = LoggingWrapper::new(Box::new(timeout_op), "GreetingOp".to_string());
@@ -78,126 +73,114 @@ let wet = WetContext::new();
 let result = logged_op.perform(&dry, &wet).await?;
 ```
 
-### Batch Ops
+### Batch Operations
 
 ```rust
 use ops::{BatchOp, DryContext, WetContext};
 use std::sync::Arc;
 
-// Execute ops in batch
 let ops: Vec<Arc<dyn Op<String>>> = vec![
-    Arc::new(GreetingOp),
     Arc::new(GreetingOp),
     Arc::new(GreetingOp),
 ];
 
-let dry = DryContext::new()
-    .with_value("name", "Alice"); // All ops will use same context
+let dry = DryContext::new().with_value("name", "Alice");
 let wet = WetContext::new();
 
 let batch = BatchOp::new(ops);
 let results = batch.perform(&dry, &wet).await?;
 ```
 
-### Resilience Patterns
-
-```rust
-use ops::{TimeBoundWrapper, LoggingWrapper};
-use std::time::Duration;
-
-// Timeout protection
-let op = Box::new(GreetingOp);
-let timeout_op = TimeBoundWrapper::new(op, Duration::from_secs(5));
-
-// Add logging
-let logged_op = LoggingWrapper::new(
-    Box::new(timeout_op),
-    "ResilientGreeting".to_string()
-);
-
-let dry = DryContext::new().with_value("name", "World");
-let wet = WetContext::new();
-
-let result = logged_op.perform(&dry, &wet).await?;
-```
-
 ## Architecture
 
 ### Core Components
 
-- **Op Trait**: Async trait for all ops with metadata and validation
-- **Dry/Wet Contexts**: Separation of serializable data from runtime references
-- **Wrapper Pattern**: Composable decorators (logging, timeout)
-- **Batch Ops**: Sequential and parallel execution with error handling
-- **Op Metadata**: Schema validation for inputs, references, and outputs
-- **Deferred Execution**: Save op requests for later execution
+- **Op Trait**: Async trait with metadata and validation
+- **Dry/Wet Contexts**: Separation of data from references
+- **Wrapper Pattern**: Composable decorators
+- **Batch Operations**: Sequential and parallel execution
+- **Deferred Execution**: Save and execute later
 
-### Advanced Features
+### Context System
 
-- **Metrics Collection**: Automatic performance tracking and telemetry
-- **HTML Processing**: Metadata extraction framework (feature-flagged)
-- **JSON Ops**: Serialization/deserialization with validation
-- **Context Factories**: Lazy initialization patterns for dependencies
-- **Error Propagation**: Rich error context through wrapper chains
+- **DryContext**: Serializable data (can be persisted)
+- **WetContext**: Runtime references (services, connections)
+- **Schema Validation**: JSON Schema validation
+- **Deferred Execution**: Save op requests for later
 
-## Performance
+## Macros
 
-Rust implementation provides:
+Ergonomic context access patterns:
 
-- Async performance with tokio runtime
-- Zero-cost abstractions with compile-time optimization
-- Memory safety without garbage collection overhead
-- Resource management with RAII patterns
-- Lock-free concurrency in some scenarios
+```rust
+use ops::{dry_put, dry_require, wet_put_ref, wet_require_ref};
+
+// Dry context (serializable data)
+dry_put!(dry, user_id);
+let name: String = dry_require!(dry, name)?;
+
+// Wet context (runtime references)
+wet_put_ref!(wet, database);
+let db: Arc<Database> = wet_require_ref!(wet, database)?;
+```
+
+Available macros:
+- `dry_put!`, `dry_get!`, `dry_require!`, `dry_result!`
+- `wet_put_ref!`, `wet_put_arc!`, `wet_get_ref!`, `wet_require_ref!`
+
+## Examples
+
+Run examples to see the framework in action:
+
+```bash
+cargo run --example dry_wet_context_demo
+cargo run --example macro_usage_demo
+```
+
+## Schema Validation
+
+Define input, reference, and output schemas:
+
+```rust
+fn metadata(&self) -> OpMetadata {
+    OpMetadata::builder("UserOp")
+        .input_schema(json!({
+            "type": "object",
+            "properties": {
+                "user_id": {"type": "string"}
+            },
+            "required": ["user_id"]
+        }))
+        .reference_schema(json!({
+            "type": "object",
+            "properties": {
+                "database": {"type": "DatabaseService"}
+            },
+            "required": ["database"]
+        }))
+        .output_schema(json!({
+            "type": "object",
+            "properties": {
+                "status": {"type": "string"}
+            }
+        }))
+        .build()
+}
+
+// Validate contexts before execution
+let validation = op.metadata().validate_contexts(&dry, &wet)?;
+if validation.is_valid {
+    let result = op.perform(&dry, &wet).await?;
+}
+```
 
 ## Testing
 
-Run the comprehensive test suite:
-
 ```bash
-# Unit tests
-cargo test
-
-# Integration tests  
-cargo test --test integration_tests
-
-# Test coverage report
-cargo test -- --test-threads=1
-
-# Performance benchmarks
-cargo test --release bench
+cargo test                          # Unit tests
+cargo test --test integration_tests # Integration tests
 ```
-
-**Test Results**: 74/75 tests passing
-
-## Documentation
-
-- [Architecture Guide](internal/ARCHITECTURE.md) - Design decisions and patterns
-- [Feature Status](internal/FEATURES.md) - Implementation progress and testing
-- [API Documentation](https://docs.rs/ops) - Generated from code comments
-
-## Op Patterns
-
-Framework provides op patterns including:
-
-- Async capabilities with tokio
-- Error handling and type safety
-- Resilience patterns
-- Memory safety with zero-cost abstractions
-
-## Contributing
-
-1. Review [Development Directives](internal/DIRECTIVES.md) for coding standards
-2. Check [Current Features](internal/FEATURES.md) for implementation status  
-3. Add tests for all new functionality
-4. Ensure `cargo test` passes before submitting
 
 ## License
 
 MIT License - see LICENSE file for details.
-
-## Status
-
-Implementation includes 36/36 features with test coverage.
-74 tests with high pass rate.
-Async implementation with tokio runtime.
