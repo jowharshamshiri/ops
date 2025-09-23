@@ -183,16 +183,16 @@ mod tests {
 
     #[tokio::test]
     async fn test_loop_op_builder_pattern() {
-        let mut ctx = OpContext::new();
+        let dry = DryContext::new();
+        let wet = WetContext::new();
         
         let loop_op = LoopOp::new("builder_counter".to_string(), 2, vec![])
             .add_op(Box::new(TestOp { value: 1 }))
             .add_op(Box::new(TestOp { value: 2 }));
 
-        let results = loop_op.perform(&mut ctx).await.unwrap();
+        let results = loop_op.perform(&dry, &wet).await.unwrap();
 
         assert_eq!(results.len(), 4);
         assert_eq!(results, vec![1, 2, 1, 2]);
-        assert_eq!(ctx.get::<usize>("builder_counter"), Some(2));
     }
 }

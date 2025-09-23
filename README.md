@@ -27,27 +27,34 @@ tokio = { version = "1.0", features = ["full"] }
 ### Basic Usage
 
 ```rust
-use ops::{Op, OpContext, perform};
+use ops::{Op, DryContext, WetContext, OpMetadata, perform};
+use async_trait::async_trait;
 
 // Define a simple op
-struct GreetingOp {
-    name: String,
-}
+struct GreetingOp;
 
-#[async_trait::async_trait]
+#[async_trait]
 impl Op<String> for GreetingOp {
-    async fn execute(&self, _ctx: &OpContext) -> Result<String, ops::OpError> {
-        Ok(format!("Hello, {}!", self.name))
+    async fn perform(&self, dry: &DryContext, _wet: &WetContext) -> Result<String, ops::OpError> {
+        let name = dry.get_required::<String>("name")?;
+        Ok(format!("Hello, {}!", name))
+    }
+    
+    fn metadata(&self) -> OpMetadata {
+        OpMetadata::builder("GreetingOp")
+            .description("Greets a person by name")
+            .build()
     }
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let op = GreetingOp { name: "World".to_string() };
-    let context = OpContext::new();
+    let dry = DryContext::new().with_value("name", "World");
+    let wet = WetContext::new();
     
     // Execute with automatic logging and error handling
-    let result = perform(op, &context).await?;
+    let op = Box::new(GreetingOp);
+    let result = perform(op, &dry, &wet).await?;
     println!("{}", result);
     
     Ok(())
@@ -57,65 +64,73 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 ### Wrapper Composition
 
 ```rust
-use ops::{LoggingWrapper, TimeBoundWrapper, OpContext};
+use ops::{LoggingWrapper, TimeBoundWrapper, DryContext, WetContext};
+use std::time::Duration;
 
 // Compose wrappers for enhanced functionality
-let op = TimeBoundWrapper::new(
-    LoggingWrapper::new(GreetingOp { name: "World".to_string() }),
-    Duration::from_secs(5)
-);
+let op = Box::new(GreetingOp);
+let timeout_op = TimeBoundWrapper::new(op, Duration::from_secs(5));
+let logged_op = LoggingWrapper::new(Box::new(timeout_op), "GreetingOp".to_string());
 
-let result = op.execute(&context).await?;
+let dry = DryContext::new().with_value("name", "World");
+let wet = WetContext::new();
+
+let result = logged_op.perform(&dry, &wet).await?;
 ```
 
 ### Batch Ops
 
 ```rust
-use ops::{BatchOp, OpContext};
+use ops::{BatchOp, DryContext, WetContext};
+use std::sync::Arc;
 
-// Execute ops in parallel with concurrency control
-let ops = vec![
-    Box::new(GreetingOp { name: "Alice".to_string() }),
-    Box::new(GreetingOp { name: "Bob".to_string() }),
-    Box::new(GreetingOp { name: "Charlie".to_string() }),
+// Execute ops in batch
+let ops: Vec<Arc<dyn Op<String>>> = vec![
+    Arc::new(GreetingOp),
+    Arc::new(GreetingOp),
+    Arc::new(GreetingOp),
 ];
 
-let batch = BatchOp::parallel(ops, Some(2)); // Max 2 concurrent
-let results = batch.execute(&context).await?;
+let dry = DryContext::new()
+    .with_value("name", "Alice"); // All ops will use same context
+let wet = WetContext::new();
+
+let batch = BatchOp::new(ops);
+let results = batch.perform(&dry, &wet).await?;
 ```
 
 ### Resilience Patterns
 
 ```rust
-use ops::{RetryOp, RetryStrategy, CircuitBreakerOp};
+use ops::{TimeBoundWrapper, LoggingWrapper};
 use std::time::Duration;
 
-// Retry with exponential backoff
-let retry_op = RetryOp::new(
-    GreetingOp { name: "World".to_string() },
-    RetryStrategy::exponential(Duration::from_millis(100), 2.0, 3)
+// Timeout protection
+let op = Box::new(GreetingOp);
+let timeout_op = TimeBoundWrapper::new(op, Duration::from_secs(5));
+
+// Add logging
+let logged_op = LoggingWrapper::new(
+    Box::new(timeout_op),
+    "ResilientGreeting".to_string()
 );
 
-// Circuit breaker protection
-let circuit_op = CircuitBreakerOp::new(
-    retry_op,
-    5,  // failure_threshold
-    Duration::from_secs(60)  // timeout
-);
+let dry = DryContext::new().with_value("name", "World");
+let wet = WetContext::new();
 
-let result = circuit_op.execute(&context).await?;
+let result = logged_op.perform(&dry, &wet).await?;
 ```
 
 ## Architecture
 
 ### Core Components
 
-- **Op Trait**: Async trait for all ops with generic return types
-- **OpContext**: Thread-safe context with serialization support
-- **Wrapper Pattern**: Composable decorators (logging, timeout, metrics)
+- **Op Trait**: Async trait for all ops with metadata and validation
+- **Dry/Wet Contexts**: Separation of serializable data from runtime references
+- **Wrapper Pattern**: Composable decorators (logging, timeout)
 - **Batch Ops**: Sequential and parallel execution with error handling
-- **Resilience Framework**: Retry, circuit breaker, and fallback strategies
-- **Resource Management**: RAII-based cleanup with automatic pooling
+- **Op Metadata**: Schema validation for inputs, references, and outputs
+- **Deferred Execution**: Save op requests for later execution
 
 ### Advanced Features
 
