@@ -46,7 +46,40 @@ impl Op<String> for ProcessDataOp {
     
     fn metadata(&self) -> OpMetadata {
         OpMetadata::builder("ProcessDataOp")
-            .description("Processes data using a service")
+            .description("Processes data using a service with iteration count")
+            .input_schema(serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "input_data": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "The data to process"
+                    },
+                    "process_count": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 10,
+                        "description": "Number of times to process the data"
+                    }
+                },
+                "required": ["input_data", "process_count"],
+                "additionalProperties": false
+            }))
+            .reference_schema(serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "data_service": {
+                        "type": "DataService",
+                        "description": "Service for processing data"
+                    }
+                },
+                "required": ["data_service"],
+                "additionalProperties": false
+            }))
+            .output_schema(serde_json::json!({
+                "type": "string",
+                "description": "The processed result after all iterations"
+            }))
             .build()
     }
 }

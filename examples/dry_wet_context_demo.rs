@@ -39,23 +39,34 @@ impl Op<String> for QueryOp {
     
     fn metadata(&self) -> OpMetadata {
         OpMetadata::builder("QueryOp")
-            .description("Execute a database query")
+            .description("Execute a database query with validation")
             .input_schema(json!({
                 "type": "object",
                 "properties": {
-                    "query": { "type": "string" }
+                    "query": { 
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 1000,
+                        "description": "SQL query to execute"
+                    }
                 },
-                "required": ["query"]
+                "required": ["query"],
+                "additionalProperties": false
             }))
             .reference_schema(json!({
                 "type": "object",
                 "properties": {
-                    "db_service": { "type": "DatabaseService" }
+                    "db_service": { 
+                        "type": "DatabaseService",
+                        "description": "Database service for query execution"
+                    }
                 },
-                "required": ["db_service"]
+                "required": ["db_service"],
+                "additionalProperties": false
             }))
             .output_schema(json!({
-                "type": "string"
+                "type": "string",
+                "description": "Query result as formatted string"
             }))
             .build()
     }

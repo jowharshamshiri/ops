@@ -1,104 +1,217 @@
-use ops::{OpError, OpResult, execute_ops, op, perform};
+use ops::prelude::*;
+use ops::{dry_put, dry_require, wet_put_ref, wet_require_ref, perform};
 use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::Arc;
 
-// Mock database and config functions for demonstration
-fn connect_to_db() -> OpResult<String> {
-    Ok("Database connection established".to_string())
+// Mock database and config services for demonstration
+struct DatabaseService {
+    connection_info: String,
 }
 
-fn load_config() -> Result<i32, OpError> {
-    Ok(42) // Magic config value
+impl DatabaseService {
+    fn new() -> Self {
+        Self {
+            connection_info: "Database connection established".to_string(),
+        }
+    }
+    
+    fn save(&self, data: i32) -> String {
+        format!("Saved {} to {}", data, self.connection_info)
+    }
+}
+
+struct ConfigService {
+    config_value: i32,
+}
+
+impl ConfigService {
+    fn new() -> Self {
+        Self {
+            config_value: 42, // Magic config value
+        }
+    }
+    
+    fn get_config(&self) -> i32 {
+        self.config_value
+    }
 }
 
 static COUNTER: AtomicU32 = AtomicU32::new(0);
-fn get_counter() -> Result<u32, OpError> {
-    Ok(COUNTER.fetch_add(1, Ordering::SeqCst))
+
+struct CounterService;
+
+impl CounterService {
+    fn get_counter(&self) -> u32 {
+        COUNTER.fetch_add(1, Ordering::SeqCst)
+    }
 }
 
-// Define some ops that can use both static values and requirements
-op!(double_number(x: i32) -> i32 {
-    Ok(x * 2)
-});
+// Define ops that use both dry and wet contexts
+struct DoubleNumberOp;
 
-op!(add_config(x: i32, config: i32) -> i32 {
-    Ok(x + config)
-});
+#[async_trait]
+impl Op<i32> for DoubleNumberOp {
+    async fn perform(&self, dry: &DryContext, _wet: &WetContext) -> OpResult<i32> {
+        let x: i32 = dry_require!(dry, x)?;
+        Ok(x * 2)
+    }
+    
+    fn metadata(&self) -> OpMetadata {
+        OpMetadata::builder("DoubleNumberOp")
+            .description("Doubles a number")
+            .build()
+    }
+}
 
-op!(save_to_database(x: i32, database: String) -> String {
-    Ok(format!("Saved {} to {}", x, database))
-});
+struct AddConfigOp;
 
-op!(increment_counter(base: i32, counter: u32) -> i32 {
-    Ok(base + counter as i32)
-});
+#[async_trait]
+impl Op<i32> for AddConfigOp {
+    async fn perform(&self, dry: &DryContext, wet: &WetContext) -> OpResult<i32> {
+        let x: i32 = dry_require!(dry, x)?;
+        let config_service: Arc<ConfigService> = wet_require_ref!(wet, config_service)?;
+        let config = config_service.get_config();
+        Ok(x + config)
+    }
+    
+    fn metadata(&self) -> OpMetadata {
+        OpMetadata::builder("AddConfigOp")
+            .description("Adds config value to a number")
+            .build()
+    }
+}
+
+struct SaveToDatabaseOp;
+
+#[async_trait]
+impl Op<String> for SaveToDatabaseOp {
+    async fn perform(&self, dry: &DryContext, wet: &WetContext) -> OpResult<String> {
+        let data: i32 = dry_require!(dry, data)?;
+        let database: Arc<DatabaseService> = wet_require_ref!(wet, database)?;
+        Ok(database.save(data))
+    }
+    
+    fn metadata(&self) -> OpMetadata {
+        OpMetadata::builder("SaveToDatabaseOp")
+            .description("Saves data to database")
+            .build()
+    }
+}
+
+struct IncrementCounterOp;
+
+#[async_trait]
+impl Op<i32> for IncrementCounterOp {
+    async fn perform(&self, dry: &DryContext, wet: &WetContext) -> OpResult<i32> {
+        let base: i32 = dry_require!(dry, base)?;
+        let counter_service: Arc<CounterService> = wet_require_ref!(wet, counter_service)?;
+        let counter = counter_service.get_counter();
+        Ok(base + counter as i32)
+    }
+    
+    fn metadata(&self) -> OpMetadata {
+        OpMetadata::builder("IncrementCounterOp")
+            .description("Adds counter value to base number")
+            .build()
+    }
+}
 
 #[tokio::main]
 async fn main() -> OpResult<()> {
     tracing_subscriber::fmt::init();
+    println!("=== Testing Modern Requirements with Dry/Wet Contexts ===\n");
 
-    println!("=== Testing Unified Requirements Syntax ===\n");
-
-    // Example 1: Mixed static values and factory functions
-    println!("1. Mixed static values and factory functions:");
-    let context = perform!(
-        [("x", 10),                          // Static value
-         ("database", || connect_to_db()),   // Factory function
-         ("config", || load_config())],      // Factory function
-        DoubleNumber,       // x=10 -> 20
-        AddConfig,          // x=20, config=42 -> 62  
-        SaveToDatabase      // data=62, database="Database..." -> formatted string
-    ).await?;
+    // Set up wet context with services
+    let mut wet = WetContext::new();
+    let database = DatabaseService::new();
+    let config_service = ConfigService::new();
+    let counter_service = CounterService;
     
-    if let Some(result) = context.get_raw("result") {
-        println!("Result: {}\n", result.as_str().unwrap_or("error"));
-    }
+    wet_put_ref!(wet, database);
+    wet_put_ref!(wet, config_service);
+    wet_put_ref!(wet, counter_service);
 
-    // Example 2: Only static values (should work the same)
+    // Example 1: Mixed static values and services
+    println!("1. Mixed static values and services:");
+    let mut dry = DryContext::new();
+    let x = 10;
+    dry_put!(dry, x);
+    
+    // Chain operations manually to show data flow
+    let double_op = DoubleNumberOp;
+    let doubled = double_op.perform(&dry, &wet).await?;
+    println!("After doubling {}: {}", x, doubled);
+    
+    // Update dry context with result for next op
+    let x = doubled;
+    dry_put!(dry, x);
+    
+    let add_config_op = AddConfigOp;
+    let with_config = add_config_op.perform(&dry, &wet).await?;
+    println!("After adding config: {}", with_config);
+    
+    // Save to database
+    let data = with_config;
+    dry_put!(dry, data);
+    
+    let save_op = SaveToDatabaseOp;
+    let save_result = save_op.perform(&dry, &wet).await?;
+    println!("Save result: {}\n", save_result);
+
+    // Example 2: Only static values (simpler case)
     println!("2. Only static values:");
-    let context = perform!(
-        [("x", 5)],
-        DoubleNumber        // x=5 -> 10
-    ).await?;
+    let mut dry = DryContext::new();
+    let x = 5;
+    dry_put!(dry, x);
     
-    if let Some(result) = context.get_raw("result") {
-        println!("Result: {}\n", result.as_i64().unwrap_or(0));
-    }
+    let result = DoubleNumberOp.perform(&dry, &wet).await?;
+    println!("Doubled result: {}\n", result);
 
-    // Example 3: Only factory functions  
-    println!("3. Only factory functions:");
-    let context = perform!(
-        [("base", || load_config()),      // Use config value as base
-         ("counter", || get_counter())],
-        IncrementCounter     // base=42, counter=0 -> 42
-    ).await?;
+    // Example 3: Using services for lazy evaluation
+    println!("3. Using services for lazy evaluation:");
+    let mut dry = DryContext::new();
+    let base = 100;
+    dry_put!(dry, base);
     
-    if let Some(result) = context.get_raw("result") {
-        println!("Result: {}\n", result.as_i64().unwrap_or(0));
-    }
+    // Counter service will increment each time it's called
+    let result = IncrementCounterOp.perform(&dry, &wet).await?;
+    println!("Base + counter: {}", result);
+    
+    // Call again to show counter increment
+    let result2 = IncrementCounterOp.perform(&dry, &wet).await?;
+    println!("Base + counter (incremented): {}\n", result2);
 
-    // Example 4: Factory functions are lazy - only called when needed
-    println!("4. Factory functions are lazy (counter should increment):");
-    let context = perform!(
-        [("base", 100),
-         ("counter", || get_counter())],     // Counter will be 1 now
-        IncrementCounter
-    ).await?;
+    // Example 4: Using the perform utility for automatic logging
+    println!("4. Using perform utility with logging:");
+    let mut dry = DryContext::new();
+    let x = 7;
+    dry_put!(dry, x);
     
-    if let Some(result) = context.get_raw("result") {
-        println!("Result: {}\n", result.as_i64().unwrap_or(0));
-    }
+    let result = perform(Box::new(DoubleNumberOp), &dry, &wet).await?;
+    println!("Logged result: {}\n", result);
 
-    // Example 5: Using execute_ops with mixed syntax
-    println!("5. Ultra-simple syntax with execute_ops:");
-    let result = execute_ops!(
-        [("x", 3),
-         ("config", || load_config())],
-        DoubleNumber,     // x=3 -> 6
-        AddConfig         // x=6, config=42 -> 48
-    ).await?;
+    // Example 5: Demonstrate service reuse
+    println!("5. Service reuse and shared state:");
+    for i in 1..=3 {
+        let mut dry = DryContext::new();
+        let base = i * 10;
+        dry_put!(dry, base);
+        
+        let result = IncrementCounterOp.perform(&dry, &wet).await?;
+        println!("Iteration {}: {} + counter = {}", i, base, result);
+    }
     
-    if let Some(value) = result {
-        println!("Result: {}", value.as_i64().unwrap_or(0));
+    // Example 6: Show all op metadata
+    println!("\n6. Op Metadata:");
+    let ops: Vec<Box<dyn Op<i32>>> = vec![
+        Box::new(DoubleNumberOp),
+        Box::new(AddConfigOp),
+        Box::new(IncrementCounterOp),
+    ];
+    
+    for op in ops {
+        let metadata = op.metadata();
+        println!("- {}: {}", metadata.name, metadata.description.unwrap_or("No description".to_string()));
     }
 
     Ok(())

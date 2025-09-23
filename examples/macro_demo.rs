@@ -1,92 +1,172 @@
-use ops::{Op, OpContext, OpError, OpResult, op};
-use serde_json::json;
+use ops::prelude::*;
+use ops::{dry_put, dry_get, dry_require, wet_put_ref, wet_require_ref};
+use std::sync::Arc;
 
-// New ergonomic ops that use OpContext for input/output
-op!(hello_operation(name: String) -> String {
-    Ok(format!("Hello, {}!", name))
-});
+// Example service for demonstration
+struct GreetingService {
+    prefix: String,
+}
 
-op!(math_operation(x: i32) -> i32 {
-    Ok(x * 2 + 1)
-});
-
-op!(complex_operation(data: Vec<String>) -> String {
-    if data.is_empty() {
-        Err(OpError::ExecutionFailed("Empty input".to_string()))
-    } else {
-        Ok(data.join(", "))
+impl GreetingService {
+    fn new(prefix: &str) -> Self {
+        Self {
+            prefix: prefix.to_string(),
+        }
     }
-});
+    
+    fn greet(&self, name: &str) -> String {
+        format!("{} {}!", self.prefix, name)
+    }
+}
 
-// Multi-parameter operation
-op!(add_operation(a: i32, b: i32) -> i32 {
-    Ok(a + b)
-});
+// Modern op implementation using dry/wet contexts
+struct HelloOp;
+
+#[async_trait]
+impl Op<String> for HelloOp {
+    async fn perform(&self, dry: &DryContext, wet: &WetContext) -> OpResult<String> {
+        let name: String = dry_require!(dry, name)?;
+        let greeting_service: Arc<GreetingService> = wet_require_ref!(wet, greeting_service)?;
+        
+        Ok(greeting_service.greet(&name))
+    }
+    
+    fn metadata(&self) -> OpMetadata {
+        OpMetadata::builder("HelloOp")
+            .description("Greets a person using a greeting service")
+            .build()
+    }
+}
+
+struct MathOp;
+
+#[async_trait]
+impl Op<i32> for MathOp {
+    async fn perform(&self, dry: &DryContext, _wet: &WetContext) -> OpResult<i32> {
+        let x: i32 = dry_require!(dry, x)?;
+        Ok(x * 2 + 1)
+    }
+    
+    fn metadata(&self) -> OpMetadata {
+        OpMetadata::builder("MathOp")
+            .description("Performs math operation: x * 2 + 1")
+            .build()
+    }
+}
+
+struct ComplexOp;
+
+#[async_trait]
+impl Op<String> for ComplexOp {
+    async fn perform(&self, dry: &DryContext, _wet: &WetContext) -> OpResult<String> {
+        let data: Vec<String> = dry_require!(dry, data)?;
+        
+        if data.is_empty() {
+            Err(OpError::ExecutionFailed("Empty input".to_string()))
+        } else {
+            Ok(data.join(", "))
+        }
+    }
+    
+    fn metadata(&self) -> OpMetadata {
+        OpMetadata::builder("ComplexOp")
+            .description("Joins a vector of strings")
+            .build()
+    }
+}
+
+struct AddOp;
+
+#[async_trait]
+impl Op<i32> for AddOp {
+    async fn perform(&self, dry: &DryContext, _wet: &WetContext) -> OpResult<i32> {
+        let a: i32 = dry_require!(dry, a)?;
+        let b: i32 = dry_require!(dry, b)?;
+        Ok(a + b)
+    }
+    
+    fn metadata(&self) -> OpMetadata {
+        OpMetadata::builder("AddOp")
+            .description("Adds two integers")
+            .build()
+    }
+}
 
 #[tokio::main]
 async fn main() -> OpResult<()> {
     tracing_subscriber::fmt::init();
-    let mut context = OpContext::new();
-
-    println!("=== Testing op! macro with OpContext ===");
+    println!("=== Testing modern Op implementations with dry/wet contexts ===");
     
-    // Test hello_operation
-    context.set("name".to_string(), json!("World"));
-    let hello_op = HelloOperation::new();
-    hello_op.perform(&mut context).await?;
+    // Create wet context with services
+    let mut wet = WetContext::new();
+    let greeting_service = GreetingService::new("Hello");
+    wet_put_ref!(wet, greeting_service);
     
-    if let Some(result) = context.get_raw("result") {
-        println!("HelloOperation result: {}", result.as_str().unwrap_or("error"));
-    }
+    // Test HelloOp
+    let mut dry = DryContext::new();
+    let name = "World".to_string();
+    dry_put!(dry, name);
     
-    // Test math_operation
-    context.set("x".to_string(), json!(5));
-    let math_op = MathOperation::new();
-    math_op.perform(&mut context).await?;
+    let hello_op = HelloOp;
+    let result = hello_op.perform(&dry, &wet).await?;
+    println!("HelloOp result: {}", result);
     
-    if let Some(result) = context.get_raw("result") {
-        println!("MathOperation result: {}", result.as_i64().unwrap_or(0));
-    }
+    // Test MathOp
+    let mut dry = DryContext::new();
+    let x = 5;
+    dry_put!(dry, x);
     
-    // Test complex_operation with data
-    context.set("data".to_string(), json!(["a", "b", "c"]));
-    let complex_op = ComplexOperation::new();
-    complex_op.perform(&mut context).await?;
+    let math_op = MathOp;
+    let result = math_op.perform(&dry, &wet).await?;
+    println!("MathOp result: {}", result);
     
-    if let Some(result) = context.get_raw("result") {
-        println!("ComplexOperation result: {}", result.as_str().unwrap_or("error"));
-    }
+    // Test ComplexOp with data
+    let mut dry = DryContext::new();
+    let data = vec!["a".to_string(), "b".to_string(), "c".to_string()];
+    dry_put!(dry, data);
     
-    // Test complex_operation with empty data
-    context.set("data".to_string(), json!([]));
-    match complex_op.perform(&mut context).await {
+    let complex_op = ComplexOp;
+    let result = complex_op.perform(&dry, &wet).await?;
+    println!("ComplexOp result: {}", result);
+    
+    // Test ComplexOp with empty data
+    let mut dry = DryContext::new();
+    let data: Vec<String> = vec![];
+    dry_put!(dry, data);
+    
+    match complex_op.perform(&dry, &wet).await {
         Ok(_) => println!("Unexpected success"),
         Err(e) => println!("Expected error: {}", e),
     }
     
-    // Test multi-parameter operation
-    context.set("a".to_string(), json!(10));
-    context.set("b".to_string(), json!(20));
-    let add_op = AddOperation::new();
-    add_op.perform(&mut context).await?;
+    // Test AddOp
+    let mut dry = DryContext::new();
+    let a = 10;
+    let b = 20;
+    dry_put!(dry, a);
+    dry_put!(dry, b);
     
-    if let Some(result) = context.get_raw("result") {
-        println!("AddOperation result: {}", result.as_i64().unwrap_or(0));
-    }
+    let add_op = AddOp;
+    let result = add_op.perform(&dry, &wet).await?;
+    println!("AddOp result: {}", result);
     
     // Test error case - missing input
-    let mut empty_context = OpContext::new();
-    match hello_op.perform(&mut empty_context).await {
+    let empty_dry = DryContext::new();
+    match hello_op.perform(&empty_dry, &wet).await {
         Ok(_) => println!("Unexpected success"),
         Err(e) => println!("Expected missing input error: {}", e),
     }
     
-    // Test error case - wrong type
-    context.set("name".to_string(), json!(42)); // Should be string, not number
-    match hello_op.perform(&mut context).await {
-        Ok(_) => println!("Unexpected success"),
-        Err(e) => println!("Expected type error: {}", e),
-    }
+    // Demonstrate using dry_get for optional values
+    let optional_value: Option<String> = dry_get!(empty_dry, name);
+    println!("Optional value from empty context: {:?}", optional_value);
+    
+    // Show metadata
+    println!("\n=== Op Metadata ===");
+    println!("HelloOp: {}", hello_op.metadata().name);
+    println!("MathOp: {}", math_op.metadata().name);
+    println!("ComplexOp: {}", complex_op.metadata().name);
+    println!("AddOp: {}", add_op.metadata().name);
 
     Ok(())
 }
