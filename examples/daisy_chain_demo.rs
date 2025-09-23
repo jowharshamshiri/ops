@@ -6,7 +6,7 @@ struct DoubleNumberOp;
 
 #[async_trait]
 impl Op<i32> for DoubleNumberOp {
-    async fn perform(&self, dry: &DryContext, _wet: &WetContext) -> OpResult<i32> {
+    async fn perform(&self, dry: &mut DryContext, _wet: &mut WetContext) -> OpResult<i32> {
         let x: i32 = dry_require!(dry, x)?;
         Ok(x * 2)
     }
@@ -22,7 +22,7 @@ struct AddTenOp;
 
 #[async_trait]
 impl Op<i32> for AddTenOp {
-    async fn perform(&self, dry: &DryContext, _wet: &WetContext) -> OpResult<i32> {
+    async fn perform(&self, dry: &mut DryContext, _wet: &mut WetContext) -> OpResult<i32> {
         // Try to get from "result" first (for chaining), then from "x"
         let x: i32 = if let Some(result) = dry_get!(dry, result) {
             result
@@ -43,7 +43,7 @@ struct FormatResultOp;
 
 #[async_trait]
 impl Op<String> for FormatResultOp {
-    async fn perform(&self, dry: &DryContext, _wet: &WetContext) -> OpResult<String> {
+    async fn perform(&self, dry: &mut DryContext, _wet: &mut WetContext) -> OpResult<String> {
         let x: i32 = if let Some(result) = dry_get!(dry, result) {
             result
         } else {
@@ -63,7 +63,7 @@ struct GreetPersonOp;
 
 #[async_trait]
 impl Op<String> for GreetPersonOp {
-    async fn perform(&self, dry: &DryContext, _wet: &WetContext) -> OpResult<String> {
+    async fn perform(&self, dry: &mut DryContext, _wet: &mut WetContext) -> OpResult<String> {
         let name: String = dry_require!(dry, name)?;
         Ok(format!("Hello, {}!", name))
     }
@@ -79,7 +79,7 @@ struct AppendSuffixOp;
 
 #[async_trait]
 impl Op<String> for AppendSuffixOp {
-    async fn perform(&self, dry: &DryContext, _wet: &WetContext) -> OpResult<String> {
+    async fn perform(&self, dry: &mut DryContext, _wet: &mut WetContext) -> OpResult<String> {
         let text: String = if let Some(result) = dry_get!(dry, result) {
             result
         } else {
@@ -98,13 +98,13 @@ impl Op<String> for AppendSuffixOp {
 // Helper function to chain operations by storing results
 async fn chain_ops<T: Send + Serialize + Clone>(
     mut dry: DryContext,
-    wet: &WetContext,
+    wet: &mut WetContext,
     ops: Vec<Box<dyn Op<T>>>,
 ) -> OpResult<T> {
     let mut last_result = None;
     
     for op in ops {
-        let result = op.perform(&dry, wet).await?;
+        let result = op.perform(&mut dry, wet).await?;
         
         // Store result for next op to potentially use
         dry_result!(dry, "op_result", result.clone());
@@ -119,7 +119,7 @@ async fn main() -> OpResult<()> {
     tracing_subscriber::fmt::init();
     println!("=== Testing Daisy Chain Ops with Dry/Wet Contexts ===\n");
 
-    let wet = WetContext::new(); // No services needed for this demo
+    let mut wet = WetContext::new(); // No services needed for this demo
 
     // Example 1: Simple number processing chain
     println!("1. Number processing chain: 5 -> double -> add 10 -> format");
@@ -130,7 +130,7 @@ async fn main() -> OpResult<()> {
     
     // Execute first op
     let double_op = DoubleNumberOp;
-    let doubled = double_op.perform(&dry, &wet).await?;
+    let doubled = double_op.perform(&mut dry, &mut wet).await?;
     println!("After doubling: {}", doubled);
     
     // Store result and continue chain
@@ -138,7 +138,7 @@ async fn main() -> OpResult<()> {
     dry_put!(dry, result);
     
     let add_op = AddTenOp;
-    let added = add_op.perform(&dry, &wet).await?;
+    let added = add_op.perform(&mut dry, &mut wet).await?;
     println!("After adding 10: {}", added);
     
     // Store and format
@@ -146,7 +146,7 @@ async fn main() -> OpResult<()> {
     dry_put!(dry, result);
     
     let format_op = FormatResultOp;
-    let formatted = format_op.perform(&dry, &wet).await?;
+    let formatted = format_op.perform(&mut dry, &mut wet).await?;
     println!("Final result: {}\n", formatted);
 
     // Example 2: Text processing chain
@@ -157,7 +157,7 @@ async fn main() -> OpResult<()> {
     dry_put!(dry, name);
     
     let greet_op = GreetPersonOp;
-    let greeting = greet_op.perform(&dry, &wet).await?;
+    let greeting = greet_op.perform(&mut dry, &mut wet).await?;
     println!("After greeting: {}", greeting);
     
     // Store result for next op
@@ -165,7 +165,7 @@ async fn main() -> OpResult<()> {
     dry_put!(dry, result);
     
     let suffix_op = AppendSuffixOp;
-    let final_text = suffix_op.perform(&dry, &wet).await?;
+    let final_text = suffix_op.perform(&mut dry, &mut wet).await?;
     println!("Final result: {}\n", final_text);
 
     // Example 3: Using the perform utility for automatic logging
@@ -175,14 +175,14 @@ async fn main() -> OpResult<()> {
     let x = 7;
     dry_put!(dry, x);
     
-    let result = perform(Box::new(DoubleNumberOp), &dry, &wet).await?;
+    let result = perform(Box::new(DoubleNumberOp), &mut dry, &mut wet).await?;
     println!("Doubled result: {}", result);
     
     // Example 4: Error handling - missing input
     println!("\n4. Error handling - missing input:");
-    let empty_dry = DryContext::new();
+    let mut empty_dry = DryContext::new();
     
-    match DoubleNumberOp.perform(&empty_dry, &wet).await {
+    match DoubleNumberOp.perform(&mut empty_dry, &mut wet).await {
         Ok(_) => println!("Unexpected success"),
         Err(e) => println!("Expected error: {}", e),
     }
@@ -195,7 +195,7 @@ async fn main() -> OpResult<()> {
     let result = 15;
     dry_put!(dry, result);
     
-    let add_result = AddTenOp.perform(&dry, &wet).await?;
+    let add_result = AddTenOp.perform(&mut dry, &mut wet).await?;
     println!("Using 'result' value (15) + 10 = {}", add_result);
     
     // Example 6: Show all available metadata

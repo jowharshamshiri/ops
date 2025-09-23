@@ -90,7 +90,7 @@ impl<T> Op<T> for LoggingWrapper<T>
 where
     T: Send + 'static,
 {
-    async fn perform(&self, dry: &DryContext, wet: &WetContext) -> OpResult<T> {
+    async fn perform(&self, dry: &mut DryContext, wet: &mut WetContext) -> OpResult<T> {
         let start_time = Instant::now();
         
         // Log op start with yellow color
@@ -140,7 +140,7 @@ mod tests {
     
     #[async_trait]
     impl Op<i32> for TestOp {
-        async fn perform(&self, _dry: &DryContext, _wet: &WetContext) -> OpResult<i32> {
+        async fn perform(&self, _dry: &mut DryContext, _wet: &mut WetContext) -> OpResult<i32> {
             Ok(42)
         }
         
@@ -153,13 +153,13 @@ mod tests {
     async fn test_logging_wrapper_success() {
         tracing_subscriber::fmt::try_init().ok(); // Initialize tracing for tests
         
-        let dry = DryContext::new();
-        let wet = WetContext::new();
+        let mut dry = DryContext::new();
+        let mut wet = WetContext::new();
         
         let op = Box::new(TestOp);
         
         let logging_wrapper = LoggingWrapper::new(op, "TestOp".to_string());
-        let result = logging_wrapper.perform(&dry, &wet).await;
+        let result = logging_wrapper.perform(&mut dry, &mut wet).await;
         
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), 42);
@@ -169,7 +169,7 @@ mod tests {
     
     #[async_trait]
     impl Op<i32> for FailingOp {
-        async fn perform(&self, _dry: &DryContext, _wet: &WetContext) -> OpResult<i32> {
+        async fn perform(&self, _dry: &mut DryContext, _wet: &mut WetContext) -> OpResult<i32> {
             Err(OpError::ExecutionFailed("test error".to_string()))
         }
         
@@ -182,13 +182,13 @@ mod tests {
     async fn test_logging_wrapper_failure() {
         tracing_subscriber::fmt::try_init().ok();
         
-        let dry = DryContext::new();
-        let wet = WetContext::new();
+        let mut dry = DryContext::new();
+        let mut wet = WetContext::new();
         
         let op = Box::new(FailingOp);
         
         let logging_wrapper: LoggingWrapper<i32> = LoggingWrapper::new(op, "FailingOp".to_string());
-        let result = logging_wrapper.perform(&dry, &wet).await;
+        let result = logging_wrapper.perform(&mut dry, &mut wet).await;
         
         assert!(result.is_err());
         match result.unwrap_err() {
@@ -203,7 +203,7 @@ mod tests {
     
     #[async_trait]
     impl Op<String> for StringOp {
-        async fn perform(&self, _dry: &DryContext, _wet: &WetContext) -> OpResult<String> {
+        async fn perform(&self, _dry: &mut DryContext, _wet: &mut WetContext) -> OpResult<String> {
             Ok("test".to_string())
         }
         
@@ -214,13 +214,13 @@ mod tests {
     
     #[tokio::test]
     async fn test_context_aware_logger() {
-        let dry = DryContext::new();
-        let wet = WetContext::new();
+        let mut dry = DryContext::new();
+        let mut wet = WetContext::new();
         
         let op = Box::new(StringOp);
         
         let logging_wrapper = create_context_aware_logger(op);
-        let result = logging_wrapper.perform(&dry, &wet).await;
+        let result = logging_wrapper.perform(&mut dry, &mut wet).await;
         
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), "test");

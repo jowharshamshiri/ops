@@ -47,7 +47,7 @@ struct UserRegistrationOp;
 
 #[async_trait]
 impl Op<String> for UserRegistrationOp {
-    async fn perform(&self, dry: &DryContext, wet: &WetContext) -> OpResult<String> {
+    async fn perform(&self, dry: &mut DryContext, wet: &mut WetContext) -> OpResult<String> {
         // Extract required data from dry context
         let username: String = dry_require!(dry, username)?;
         let email: String = dry_require!(dry, email)?;
@@ -144,7 +144,7 @@ struct DataProcessingOp;
 
 #[async_trait]
 impl Op<serde_json::Value> for DataProcessingOp {
-    async fn perform(&self, dry: &DryContext, wet: &WetContext) -> OpResult<serde_json::Value> {
+    async fn perform(&self, dry: &mut DryContext, wet: &mut WetContext) -> OpResult<serde_json::Value> {
         // Required fields
         let input_data: String = dry_require!(dry, input_data)?;
         let processing_type: String = dry_require!(dry, processing_type)?;
@@ -316,7 +316,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     
     // Execute the op
-    let user_result = user_op.perform(&user_dry, &user_wet).await?;
+    let user_result = user_op.perform(&mut user_dry, &mut user_wet).await?;
     println!("User registration result: {}", user_result);
     
     // Validate output
@@ -359,7 +359,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Wet context validation: {}", if data_wet_validation.is_valid { "✓ passed" } else { "✗ failed" });
     
     // Execute the op
-    let data_result = data_op.perform(&data_dry, &data_wet).await?;
+    let data_result = data_op.perform(&mut data_dry, &mut data_wet).await?;
     println!("Data processing result: {}", serde_json::to_string_pretty(&data_result)?);
     
     // Validate output
@@ -379,7 +379,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("OpRequest created with ID: {}", op_request.id);
     println!("OpRequest validation and context extraction...");
     
-    let validated_dry = op_request.validate_and_get_dry_context()?;
+    let mut validated_dry = op_request.validate_and_get_dry_context()?;
     println!("✓ OpRequest dry context validated successfully");
     
     // Show how to reconstruct and execute later
@@ -391,7 +391,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     wet_put_ref!(later_wet, db_service);
     wet_put_ref!(later_wet, email_service);
     
-    let later_result = user_op.perform(&validated_dry, &later_wet).await?;
+    let later_result = user_op.perform(&mut validated_dry, &mut later_wet).await?;
     println!("Later execution result: {}", later_result);
     
     // Example 4: Show schema information

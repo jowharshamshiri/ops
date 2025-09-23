@@ -24,7 +24,7 @@ struct QueryOp;
 
 #[async_trait]
 impl Op<String> for QueryOp {
-    async fn perform(&self, dry: &DryContext, wet: &WetContext) -> OpResult<String> {
+    async fn perform(&self, dry: &mut DryContext, wet: &mut WetContext) -> OpResult<String> {
         // Get query from dry context (serializable data)
         let query = dry.get_required::<String>("query")?;
         
@@ -84,12 +84,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let op = QueryOp;
     
     // Create dry context with serializable data
-    let dry = DryContext::new()
+    let mut dry = DryContext::new()
         .with_value("query", "SELECT * FROM users WHERE active = true");
     
     // Create wet context with runtime references
     let db_service = DatabaseService::new("postgres://localhost/mydb");
-    let wet = WetContext::new()
+    let mut wet = WetContext::new()
         .with_ref("db_service", db_service);
     
     // Validate contexts against op metadata
@@ -104,7 +104,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     // Execute the op
     println!("Executing op...");
-    let result = op.perform(&dry, &wet).await?;
+    let result = op.perform(&mut dry, &mut wet).await?;
     println!("Result: {}\n", result);
     
     // Demonstrate op request persistence (simulated)
@@ -129,11 +129,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     // Execute with new wet context
     let new_db_service = DatabaseService::new("postgres://backup-server/mydb");
-    let new_wet = WetContext::new()
+    let mut new_wet = WetContext::new()
         .with_ref("db_service", new_db_service);
     
     println!("\nExecuting loaded op with different database...");
-    let new_result = op.perform(&loaded_dry, &new_wet).await?;
+    let mut loaded_dry = loaded_dry;
+    let new_result = op.perform(&mut loaded_dry, &mut new_wet).await?;
     println!("Result: {}", new_result);
     
     // Demonstrate output validation

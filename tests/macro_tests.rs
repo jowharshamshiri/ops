@@ -81,7 +81,7 @@ struct MacroTestOp;
 
 #[async_trait]
 impl Op<String> for MacroTestOp {
-    async fn perform(&self, dry: &DryContext, wet: &WetContext) -> Result<String, OpError> {
+    async fn perform(&self, dry: &mut DryContext, wet: &mut WetContext) -> Result<String, OpError> {
         // Use dry_require for dry context
         let input: String = dry_require!(dry, input)?;
         let count: i32 = dry_require!(dry, count)?;
@@ -114,7 +114,7 @@ async fn test_macros_in_op() {
     
     // Execute op
     let op = MacroTestOp;
-    let result = op.perform(&dry, &wet).await;
+    let result = op.perform(&mut dry, &mut wet).await;
     
     assert!(result.is_ok());
     assert_eq!(result.unwrap(), "test x 3 = 42");

@@ -19,7 +19,7 @@ struct ScanDirectoryOp;
 
 #[async_trait]
 impl Op<()> for ValidateFolderPathOp {
-    async fn perform(&self, _dry: &DryContext, wet: &WetContext) -> OpResult<()> {
+    async fn perform(&self, dry: &mut DryContext, wet: &mut WetContext) -> OpResult<()> {
         println!("ValidateFolderPathOp: Checking for filesystem_service...");
         
         // Check if reference exists
@@ -45,7 +45,7 @@ impl Op<()> for ValidateFolderPathOp {
 
 #[async_trait]
 impl Op<Vec<String>> for ScanDirectoryOp {
-    async fn perform(&self, _dry: &DryContext, wet: &WetContext) -> OpResult<Vec<String>> {
+    async fn perform(&self, dry: &mut DryContext, wet: &mut WetContext) -> OpResult<Vec<String>> {
         println!("ScanDirectoryOp: Checking for filesystem_service...");
         
         // Check if reference exists
@@ -81,7 +81,7 @@ struct ScanDirectoryWrapperOp;
 
 #[async_trait]
 impl Op<()> for ScanDirectoryWrapperOp {
-    async fn perform(&self, dry: &DryContext, wet: &WetContext) -> OpResult<()> {
+    async fn perform(&self, dry: &mut DryContext, wet: &mut WetContext) -> OpResult<()> {
         let scan_op = ScanDirectoryOp;
         let discovered_files = scan_op.perform(dry, wet).await?;
         
@@ -106,7 +106,7 @@ impl Op<()> for ScanDirectoryWrapperOp {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("=== Debug Filesystem Reference Issue with Dry/Wet Contexts ===");
     
-    let dry = DryContext::new();
+    let mut dry = DryContext::new();
     let mut wet = WetContext::new();
     
     // Simulate your exact code pattern
@@ -142,7 +142,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Execute discovery batch
     println!("5. Executing discovery batch...");
     discovery_batch
-        .perform(&dry, &wet)
+        .perform(&mut dry, &mut wet)
         .await
         .map_err(|e| OpError::ExecutionFailed(format!("Directory discovery failed: {}", e)))?;
     
@@ -151,7 +151,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Test individual op execution
     println!("6. Testing individual op execution...");
     let scan_op = ScanDirectoryOp;
-    let discovered_files = scan_op.perform(&dry, &wet).await?;
+    let discovered_files = scan_op.perform(&mut dry, &mut wet).await?;
     
     println!("✓ Found {} discovered files:", discovered_files.len());
     for path in &discovered_files {

@@ -116,7 +116,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     #[async_trait]
     impl Op<String> for DataProcessorOp {
-        async fn perform(&self, _dry: &DryContext, wet: &WetContext) -> OpResult<String> {
+        async fn perform(&self, _dry: &mut DryContext, wet: &mut WetContext) -> OpResult<String> {
             // Use wet_require_ref macro in an op
             let data: Arc<Vec<i32>> = wet_require_ref!(wet, large_dataset)?;
             let sum: i32 = data.iter().sum();
@@ -131,11 +131,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     
     // Execute the op using the wet context
-    let dry = DryContext::new();
+    let mut dry = DryContext::new();
     let processor = DataProcessorOp;
     
     tokio::runtime::Runtime::new()?.block_on(async {
-        match processor.perform(&dry, &wet).await {
+        match processor.perform(&mut dry, &mut wet).await {
             Ok(result) => println!("Op result: {}", result),
             Err(e) => println!("Op error: {}", e),
         }

@@ -9,7 +9,7 @@ use std::panic::Location;
 
 /// Central execution function with automatic logging wrapper
 /// Equivalent to Java OPS.perform() method
-pub async fn perform<T>(op: Box<dyn Op<T>>, dry: &DryContext, wet: &WetContext) -> OpResult<T>
+pub async fn perform<T>(op: Box<dyn Op<T>>, dry: &mut DryContext, wet: &mut WetContext) -> OpResult<T>
 where
     T: Send + 'static,
 {
@@ -76,7 +76,7 @@ mod tests {
     
     #[async_trait]
     impl Op<i32> for TestOp {
-        async fn perform(&self, _dry: &DryContext, _wet: &WetContext) -> OpResult<i32> {
+        async fn perform(&self, _dry: &mut DryContext, _wet: &mut WetContext) -> OpResult<i32> {
             Ok(42)
         }
         
@@ -87,12 +87,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_perform_with_auto_logging() {
-        let dry = DryContext::new();
-        let wet = WetContext::new();
+        let mut dry = DryContext::new();
+        let mut wet = WetContext::new();
         
         let op = Box::new(TestOp);
         
-        let result = perform(op, &dry, &wet).await;
+        let result = perform(op, &mut dry, &mut wet).await;
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), 42);
     }

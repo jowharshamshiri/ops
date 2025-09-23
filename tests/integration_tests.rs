@@ -23,7 +23,7 @@ struct FailingOp;
 
 #[async_trait]
 impl Op<String> for FailingOp {
-    async fn perform(&self, _dry: &DryContext, _wet: &WetContext) -> Result<String, OpError> {
+    async fn perform(&self, _dry: &mut DryContext, _wet: &mut WetContext) -> Result<String, OpError> {
         Err(OpError::ExecutionFailed("Simulated failure".to_string()))
     }
     
@@ -37,8 +37,8 @@ impl Op<String> for FailingOp {
 #[tokio::test]
 async fn test_error_handling_and_wrapper_chains() {
     tracing_subscriber::fmt::try_init().ok();
-    let dry = DryContext::new();
-    let wet = WetContext::new();
+    let mut dry = DryContext::new();
+    let mut wet = WetContext::new();
     
     // Create op that will fail
     let failing_op = Box::new(FailingOp);
@@ -47,7 +47,7 @@ async fn test_error_handling_and_wrapper_chains() {
     let timeout_op: TimeBoundWrapper<String> = TimeBoundWrapper::with_name(failing_op, Duration::from_millis(50), "FailingOp".to_string());
     let logged_op = LoggingWrapper::new(Box::new(timeout_op), "TestFailure".to_string());
     
-    let result = logged_op.perform(&dry, &wet).await;
+    let result = logged_op.perform(&mut dry, &mut wet).await;
     assert!(result.is_err());
     
     // Verify error wrapping with op context
@@ -84,7 +84,7 @@ struct SlowOp;
 
 #[async_trait]
 impl Op<String> for SlowOp {
-    async fn perform(&self, _dry: &DryContext, _wet: &WetContext) -> Result<String, OpError> {
+    async fn perform(&self, _dry: &mut DryContext, _wet: &mut WetContext) -> Result<String, OpError> {
         tokio::time::sleep(Duration::from_millis(200)).await;
         Ok("should_timeout".to_string())
     }
@@ -99,8 +99,8 @@ impl Op<String> for SlowOp {
 #[tokio::test]
 async fn test_timeout_wrapper_functionality() {
     tracing_subscriber::fmt::try_init().ok();
-    let dry = DryContext::new();
-    let wet = WetContext::new();
+    let mut dry = DryContext::new();
+    let mut wet = WetContext::new();
     
     // Create slow op
     let slow_op = Box::new(SlowOp);
@@ -109,7 +109,7 @@ async fn test_timeout_wrapper_functionality() {
     let timeout_op = TimeBoundWrapper::with_name(slow_op, Duration::from_millis(50), "SlowOp".to_string());
     let logged_timeout_op = LoggingWrapper::new(Box::new(timeout_op), "TimeoutTest".to_string());
     
-    let result = logged_timeout_op.perform(&dry, &wet).await;
+    let result = logged_timeout_op.perform(&mut dry, &mut wet).await;
     assert!(result.is_err());
     
     match result.unwrap_err() {
@@ -141,7 +141,7 @@ struct ConfigOp;
 
 #[async_trait]
 impl Op<Config> for ConfigOp {
-    async fn perform(&self, _dry: &DryContext, wet: &WetContext) -> Result<Config, OpError> {
+    async fn perform(&self, _dry: &mut DryContext, wet: &mut WetContext) -> Result<Config, OpError> {
         let config_service = wet.get_required::<ConfigService>("config_service")?;
         Ok(config_service.get_config().await)
     }
@@ -161,11 +161,11 @@ async fn test_dry_and_wet_context_usage() {
     dry.insert("debug", true);
     
     let config_service = ConfigService;
-    let wet = WetContext::new()
+    let mut wet = WetContext::new()
         .with_ref("config_service", config_service);
     
     let config_op = ConfigOp;
-    let config = config_op.perform(&dry, &wet).await.unwrap();
+    let config = config_op.perform(&mut dry, &mut wet).await.unwrap();
     
     assert_eq!(config.database_url, "postgres://localhost:5432/test");
     assert_eq!(config.timeout, 30);
@@ -175,7 +175,7 @@ struct UserOp;
 
 #[async_trait]
 impl Op<User> for UserOp {
-    async fn perform(&self, dry: &DryContext, _wet: &WetContext) -> Result<User, OpError> {
+    async fn perform(&self, dry: &mut DryContext, _wet: &mut WetContext) -> Result<User, OpError> {
         let user_id = dry.get_required::<u32>("user_id")?;
         let name = dry.get_required::<String>("name")?;
         let email = dry.get_required::<String>("email")?;
@@ -197,11 +197,11 @@ impl Op<User> for UserOp {
 
 #[tokio::test]
 async fn test_batch_ops() {
-    let dry = DryContext::new()
+    let mut dry = DryContext::new()
         .with_value("user_id", 1u32)
         .with_value("name", "John Doe")
         .with_value("email", "john@example.com");
-    let wet = WetContext::new();
+    let mut wet = WetContext::new();
     
     let ops: Vec<Arc<dyn Op<User>>> = vec![
         Arc::new(UserOp),
@@ -209,7 +209,7 @@ async fn test_batch_ops() {
     ];
     
     let batch_op = BatchOp::new(ops);
-    let results = batch_op.perform(&dry, &wet).await.unwrap();
+    let results = batch_op.perform(&mut dry, &mut wet).await.unwrap();
     
     assert_eq!(results.len(), 2);
     for user in results {
@@ -221,15 +221,15 @@ async fn test_batch_ops() {
 
 #[tokio::test]
 async fn test_wrapper_composition() {
-    let dry = DryContext::new();
-    let wet = WetContext::new();
+    let mut dry = DryContext::new();
+    let mut wet = WetContext::new();
     
     // Create a simple op that returns success
     struct SimpleOp;
     
     #[async_trait]
     impl Op<String> for SimpleOp {
-        async fn perform(&self, _dry: &DryContext, _wet: &WetContext) -> Result<String, OpError> {
+        async fn perform(&self, _dry: &mut DryContext, _wet: &mut WetContext) -> Result<String, OpError> {
             Ok("success".to_string())
         }
         
@@ -243,20 +243,20 @@ async fn test_wrapper_composition() {
     let timeout_op = TimeBoundWrapper::new(op, Duration::from_secs(1));
     let logged_op = LoggingWrapper::new(Box::new(timeout_op), "ComposedOp".to_string());
     
-    let result = logged_op.perform(&dry, &wet).await.unwrap();
+    let result = logged_op.perform(&mut dry, &mut wet).await.unwrap();
     assert_eq!(result, "success");
 }
 
 #[tokio::test]
 async fn test_perform_utility() {
-    let dry = DryContext::new();
-    let wet = WetContext::new();
+    let mut dry = DryContext::new();
+    let mut wet = WetContext::new();
     
     struct AutoLoggedOp;
     
     #[async_trait]
     impl Op<i32> for AutoLoggedOp {
-        async fn perform(&self, _dry: &DryContext, _wet: &WetContext) -> Result<i32, OpError> {
+        async fn perform(&self, _dry: &mut DryContext, _wet: &mut WetContext) -> Result<i32, OpError> {
             Ok(42)
         }
         
@@ -266,6 +266,6 @@ async fn test_perform_utility() {
     }
     
     // Use the perform utility function which adds automatic logging
-    let result = perform(Box::new(AutoLoggedOp), &dry, &wet).await.unwrap();
+    let result = perform(Box::new(AutoLoggedOp), &mut dry, &mut wet).await.unwrap();
     assert_eq!(result, 42);
 }

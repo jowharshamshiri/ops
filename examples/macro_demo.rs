@@ -24,7 +24,7 @@ struct HelloOp;
 
 #[async_trait]
 impl Op<String> for HelloOp {
-    async fn perform(&self, dry: &DryContext, wet: &WetContext) -> OpResult<String> {
+    async fn perform(&self, dry: &mut DryContext, wet: &mut WetContext) -> OpResult<String> {
         let name: String = dry_require!(dry, name)?;
         let greeting_service: Arc<GreetingService> = wet_require_ref!(wet, greeting_service)?;
         
@@ -42,7 +42,7 @@ struct MathOp;
 
 #[async_trait]
 impl Op<i32> for MathOp {
-    async fn perform(&self, dry: &DryContext, _wet: &WetContext) -> OpResult<i32> {
+    async fn perform(&self, dry: &mut DryContext, _wet: &mut WetContext) -> OpResult<i32> {
         let x: i32 = dry_require!(dry, x)?;
         Ok(x * 2 + 1)
     }
@@ -58,7 +58,7 @@ struct ComplexOp;
 
 #[async_trait]
 impl Op<String> for ComplexOp {
-    async fn perform(&self, dry: &DryContext, _wet: &WetContext) -> OpResult<String> {
+    async fn perform(&self, dry: &mut DryContext, _wet: &mut WetContext) -> OpResult<String> {
         let data: Vec<String> = dry_require!(dry, data)?;
         
         if data.is_empty() {
@@ -79,7 +79,7 @@ struct AddOp;
 
 #[async_trait]
 impl Op<i32> for AddOp {
-    async fn perform(&self, dry: &DryContext, _wet: &WetContext) -> OpResult<i32> {
+    async fn perform(&self, dry: &mut DryContext, _wet: &mut WetContext) -> OpResult<i32> {
         let a: i32 = dry_require!(dry, a)?;
         let b: i32 = dry_require!(dry, b)?;
         Ok(a + b)
@@ -108,7 +108,7 @@ async fn main() -> OpResult<()> {
     dry_put!(dry, name);
     
     let hello_op = HelloOp;
-    let result = hello_op.perform(&dry, &wet).await?;
+    let result = hello_op.perform(&mut dry, &mut wet).await?;
     println!("HelloOp result: {}", result);
     
     // Test MathOp
@@ -117,7 +117,7 @@ async fn main() -> OpResult<()> {
     dry_put!(dry, x);
     
     let math_op = MathOp;
-    let result = math_op.perform(&dry, &wet).await?;
+    let result = math_op.perform(&mut dry, &mut wet).await?;
     println!("MathOp result: {}", result);
     
     // Test ComplexOp with data
@@ -126,7 +126,7 @@ async fn main() -> OpResult<()> {
     dry_put!(dry, data);
     
     let complex_op = ComplexOp;
-    let result = complex_op.perform(&dry, &wet).await?;
+    let result = complex_op.perform(&mut dry, &mut wet).await?;
     println!("ComplexOp result: {}", result);
     
     // Test ComplexOp with empty data
@@ -134,7 +134,7 @@ async fn main() -> OpResult<()> {
     let data: Vec<String> = vec![];
     dry_put!(dry, data);
     
-    match complex_op.perform(&dry, &wet).await {
+    match complex_op.perform(&mut dry, &mut wet).await {
         Ok(_) => println!("Unexpected success"),
         Err(e) => println!("Expected error: {}", e),
     }
@@ -147,12 +147,12 @@ async fn main() -> OpResult<()> {
     dry_put!(dry, b);
     
     let add_op = AddOp;
-    let result = add_op.perform(&dry, &wet).await?;
+    let result = add_op.perform(&mut dry, &mut wet).await?;
     println!("AddOp result: {}", result);
     
     // Test error case - missing input
-    let empty_dry = DryContext::new();
-    match hello_op.perform(&empty_dry, &wet).await {
+    let mut empty_dry = DryContext::new();
+    match hello_op.perform(&mut empty_dry, &mut wet).await {
         Ok(_) => println!("Unexpected success"),
         Err(e) => println!("Expected missing input error: {}", e),
     }
