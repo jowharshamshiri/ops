@@ -78,3 +78,56 @@ macro_rules! wet_require_ref {
         $ctx.get_required::<_>(stringify!($var))
     };
 }
+
+/// Create a named batch op type with a fixed list of child ops
+/// Usage:
+/// ```rust
+/// batch! {
+///     ProcessingPipeline<String> = [
+///         ValidationOp::new(),
+///         TransformOp::new(),
+///         PersistOp::new()
+///     ]
+/// }
+/// ```
+#[macro_export]
+macro_rules! batch {
+    ($name:ident<$T:ty> = [$($op:expr),+ $(,)?]) => {
+        pub struct $name {
+            batch: $crate::BatchOp<$T>,
+        }
+        
+        impl $name {
+            pub fn new() -> Self {
+                let ops: Vec<std::sync::Arc<dyn $crate::Op<$T>>> = vec![
+                    $(std::sync::Arc::new($op)),+
+                ];
+                Self {
+                    batch: $crate::BatchOp::new(ops),
+                }
+            }
+            
+            pub fn with_continue_on_error(mut self, continue_on_error: bool) -> Self {
+                self.batch = self.batch.with_continue_on_error(continue_on_error);
+                self
+            }
+        }
+        
+        impl Default for $name {
+            fn default() -> Self {
+                Self::new()
+            }
+        }
+        
+        #[async_trait::async_trait]
+        impl $crate::Op<Vec<$T>> for $name {
+            async fn perform(&self, dry: &mut $crate::DryContext, wet: &mut $crate::WetContext) -> $crate::OpResult<Vec<$T>> {
+                self.batch.perform(dry, wet).await
+            }
+            
+            fn metadata(&self) -> $crate::OpMetadata {
+                self.batch.metadata()
+            }
+        }
+    };
+}
