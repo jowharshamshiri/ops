@@ -131,3 +131,58 @@ macro_rules! batch {
         }
     };
 }
+
+/// Create a named loop op type with a fixed list of child ops
+/// Usage:
+/// ```rust
+/// repeat! {
+///     ProcessLoop<String> = {
+///         counter: "iteration",
+///         limit: 10,
+///         ops: [
+///             StepOp::new(),
+///             LogOp::new()
+///         ]
+///     }
+/// }
+/// ```
+#[macro_export]
+macro_rules! repeat {
+    ($name:ident<$T:ty> = {
+        counter: $counter:expr,
+        limit: $limit:expr,
+        ops: [$($op:expr),+ $(,)?]
+    }) => {
+        pub struct $name {
+            loop_op: $crate::loop_op::LoopOp<$T>,
+        }
+        
+        impl $name {
+            pub fn new() -> Self {
+                let ops: Vec<Box<dyn $crate::Op<$T>>> = vec![
+                    $(Box::new($op)),+
+                ];
+                Self {
+                    loop_op: $crate::loop_op::LoopOp::new($counter.to_string(), $limit, ops),
+                }
+            }
+        }
+        
+        impl Default for $name {
+            fn default() -> Self {
+                Self::new()
+            }
+        }
+        
+        #[async_trait::async_trait]
+        impl $crate::Op<Vec<$T>> for $name {
+            async fn perform(&self, dry: &mut $crate::DryContext, wet: &mut $crate::WetContext) -> $crate::OpResult<Vec<$T>> {
+                self.loop_op.perform(dry, wet).await
+            }
+            
+            fn metadata(&self) -> $crate::OpMetadata {
+                self.loop_op.metadata()
+            }
+        }
+    };
+}
