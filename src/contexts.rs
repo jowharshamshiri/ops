@@ -33,8 +33,29 @@ impl DryContext {
     }
 
     pub fn get_required<T: for<'de> Deserialize<'de>>(&self, key: &str) -> Result<T, OpError> {
-        self.get(key)
-            .ok_or_else(|| OpError::Context(format!("Required dry context key '{}' not found", key)))
+        match self.values.get(key) {
+            None => Err(OpError::Context(format!("Required dry context key '{}' not found", key))),
+            Some(value) => {
+                match serde_json::from_value::<T>(value.clone()) {
+                    Ok(parsed) => Ok(parsed),
+                    Err(_) => {
+                        let actual_type = match value {
+                            serde_json::Value::Null => "null",
+                            serde_json::Value::Bool(_) => "boolean",
+                            serde_json::Value::Number(_) => "number",
+                            serde_json::Value::String(_) => "string",
+                            serde_json::Value::Array(_) => "array",
+                            serde_json::Value::Object(_) => "object",
+                        };
+                        let expected_type = std::any::type_name::<T>();
+                        Err(OpError::Context(format!(
+                            "Type mismatch for dry context key '{}': expected type '{}', but found '{}' value: {}",
+                            key, expected_type, actual_type, value
+                        )))
+                    }
+                }
+            }
+        }
     }
 
     pub fn contains(&self, key: &str) -> bool {
@@ -91,8 +112,21 @@ impl WetContext {
     }
 
     pub fn get_required<T: Any + Send + Sync>(&self, key: &str) -> Result<Arc<T>, OpError> {
-        self.get_ref(key)
-            .ok_or_else(|| OpError::Context(format!("Required wet context reference '{}' not found", key)))
+        match self.references.get(key) {
+            None => Err(OpError::Context(format!("Required wet context reference '{}' not found", key))),
+            Some(any_ref) => {
+                match any_ref.clone().downcast::<T>() {
+                    Ok(typed_ref) => Ok(typed_ref),
+                    Err(_) => {
+                        let expected_type = std::any::type_name::<T>();
+                        Err(OpError::Context(format!(
+                            "Type mismatch for wet context reference '{}': expected type '{}', but found a different type",
+                            key, expected_type
+                        )))
+                    }
+                }
+            }
+        }
     }
 
     pub fn contains(&self, key: &str) -> bool {
@@ -180,5 +214,65 @@ mod tests {
         ctx1.merge(ctx2);
         assert_eq!(ctx1.get::<i32>("a").unwrap(), 1);
         assert_eq!(ctx1.get::<i32>("b").unwrap(), 2);
+    }
+
+    #[test]
+    fn test_dry_context_type_mismatch_error() {
+        let ctx = DryContext::new()
+            .with_value("count", "not_a_number")
+            .with_value("flag", 123);
+        
+        // String value, expecting i32
+        let result = ctx.get_required::<i32>("count");
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("Type mismatch"));
+        assert!(err.contains("expected type 'i32'"));
+        assert!(err.contains("found 'string' value"));
+        
+        // Number value, expecting bool
+        let result = ctx.get_required::<bool>("flag");
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("Type mismatch"));
+        assert!(err.contains("expected type 'bool'"));
+        assert!(err.contains("found 'number' value"));
+        
+        // Missing key still gives "not found"
+        let result = ctx.get_required::<i32>("missing");
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("not found"));
+        assert!(!err.contains("Type mismatch"));
+    }
+
+    #[test]
+    fn test_wet_context_type_mismatch_error() {
+        #[derive(Debug)]
+        struct ServiceA {
+            _name: String,
+        }
+        #[derive(Debug)]
+        struct ServiceB {
+            _id: i32,
+        }
+        
+        let mut ctx = WetContext::new();
+        ctx.insert_ref("service", ServiceA { _name: "test".to_string() });
+        
+        // Wrong type
+        let result = ctx.get_required::<ServiceB>("service");
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("Type mismatch"));
+        assert!(err.contains("expected type"));
+        assert!(err.contains("ServiceB"));
+        
+        // Missing key
+        let result = ctx.get_required::<ServiceA>("missing");
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("not found"));
+        assert!(!err.contains("Type mismatch"));
     }
 }
