@@ -133,12 +133,13 @@ macro_rules! batch {
 }
 
 /// Create a named loop op type with a fixed list of child ops
+/// The limit is loaded from a variable in the dry context
 /// Usage:
 /// ```rust
 /// repeat! {
 ///     ProcessLoop<String> = {
 ///         counter: "iteration",
-///         limit: 10,
+///         limit: "max_iterations",  // Variable name in dry context
 ///         ops: [
 ///             StepOp::new(),
 ///             LogOp::new()
@@ -150,21 +151,26 @@ macro_rules! batch {
 macro_rules! repeat {
     ($name:ident<$T:ty> = {
         counter: $counter:expr,
-        limit: $limit:expr,
+        limit: $limit_var:expr,
         ops: [$($op:expr),+ $(,)?]
     }) => {
         pub struct $name {
-            loop_op: $crate::loop_op::LoopOp<$T>,
+            counter_var: String,
+            limit_var: String,
         }
         
         impl $name {
             pub fn new() -> Self {
-                let ops: Vec<Box<dyn $crate::Op<$T>>> = vec![
-                    $(Box::new($op)),+
-                ];
                 Self {
-                    loop_op: $crate::loop_op::LoopOp::new($counter.to_string(), $limit, ops),
+                    counter_var: $counter.to_string(),
+                    limit_var: $limit_var.to_string(),
                 }
+            }
+            
+            fn create_ops() -> Vec<Box<dyn $crate::Op<$T>>> {
+                vec![
+                    $(Box::new($op)),+
+                ]
             }
         }
         
@@ -177,11 +183,34 @@ macro_rules! repeat {
         #[async_trait::async_trait]
         impl $crate::Op<Vec<$T>> for $name {
             async fn perform(&self, dry: &mut $crate::DryContext, wet: &mut $crate::WetContext) -> $crate::OpResult<Vec<$T>> {
-                self.loop_op.perform(dry, wet).await
+                // Get limit from context
+                let limit = dry.get_required::<usize>(&self.limit_var)?;
+                
+                let ops = Self::create_ops();
+                let loop_op = $crate::loop_op::LoopOp::new(
+                    self.counter_var.clone(),
+                    limit,
+                    ops
+                );
+                loop_op.perform(dry, wet).await
             }
             
             fn metadata(&self) -> $crate::OpMetadata {
-                self.loop_op.metadata()
+                let limit_var = self.limit_var.clone();
+                let mut properties = serde_json::Map::new();
+                properties.insert(
+                    limit_var.clone(),
+                    serde_json::json!({ "type": "integer", "minimum": 0 })
+                );
+                
+                $crate::OpMetadata::builder(stringify!($name))
+                    .description(format!("Loop with dynamic limit from '{}'", limit_var))
+                    .input_schema(serde_json::json!({
+                        "type": "object",
+                        "properties": properties,
+                        "required": [limit_var]
+                    }))
+                    .build()
             }
         }
     };
