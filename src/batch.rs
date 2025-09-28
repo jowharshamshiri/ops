@@ -52,7 +52,7 @@ where
                         errors.push((index, error));
                     } else {
                         return Err(OpError::BatchFailed(
-                            format!("Op {} failed: {}", index, error)
+                            format!("Op {}-{} failed: {}", index, op.metadata().name, error)
                         ));
                     }
                 }
@@ -122,7 +122,7 @@ where
                         errors.push((index, error));
                     } else {
                         return Err(OpError::BatchFailed(
-                            format!("Op {} failed: {}", index, error)
+                            format!("Op {}-{} failed: {}", index, op.metadata().name, error)
                         ));
                     }
                 }
