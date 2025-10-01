@@ -15,6 +15,9 @@ pub enum OpError {
     #[error("Batch op failed: {0}")]
     BatchFailed(String),
     
+    #[error("Op aborted: {0}")]
+    Aborted(String),
+    
     #[error(transparent)]
     Other(#[from] Box<dyn std::error::Error + Send + Sync>),
 }
@@ -26,6 +29,7 @@ impl Clone for OpError {
             Self::Timeout { timeout_ms } => Self::Timeout { timeout_ms: *timeout_ms },
             Self::Context(msg) => Self::Context(msg.clone()),
             Self::BatchFailed(msg) => Self::BatchFailed(msg.clone()),
+            Self::Aborted(msg) => Self::Aborted(msg.clone()),
             Self::Other(boxed_error) => Self::ExecutionFailed(format!("{}", boxed_error)),
         }
     }

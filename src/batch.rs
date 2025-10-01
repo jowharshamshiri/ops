@@ -45,8 +45,20 @@ where
         let mut errors = Vec::new();
         
         for (index, op) in self.ops.iter().enumerate() {
+            // Check if we should abort before executing each op
+            if dry.is_aborted() {
+                let reason = dry.abort_reason()
+                    .cloned()
+                    .unwrap_or_else(|| "Batch operation aborted".to_string());
+                return Err(OpError::Aborted(reason));
+            }
+            
             match op.perform(dry, wet).await {
                 Ok(result) => results.push(result),
+                Err(OpError::Aborted(reason)) => {
+                    // Aborted errors should not trigger retries, propagate immediately
+                    return Err(OpError::Aborted(reason));
+                }
                 Err(error) => {
                     if self.continue_on_error {
                         errors.push((index, error));
@@ -115,8 +127,20 @@ where
         let mut errors = Vec::new();
         
         for (index, op) in self.ops.iter().enumerate() {
+            // Check if we should abort before executing each op
+            if dry.is_aborted() {
+                let reason = dry.abort_reason()
+                    .cloned()
+                    .unwrap_or_else(|| "Parallel batch operation aborted".to_string());
+                return Err(OpError::Aborted(reason));
+            }
+            
             match op.perform(dry, wet).await {
                 Ok(result) => results.push(result),
+                Err(OpError::Aborted(reason)) => {
+                    // Aborted errors should not trigger retries, propagate immediately
+                    return Err(OpError::Aborted(reason));
+                }
                 Err(error) => {
                     if self.continue_on_error {
                         errors.push((index, error));

@@ -59,10 +59,42 @@ where
         }
 
         while counter < self.limit {
+            // Check if we should abort before each iteration
+            if dry.is_aborted() {
+                let reason = dry.abort_reason()
+                    .cloned()
+                    .unwrap_or_else(|| "Loop operation aborted".to_string());
+                return Err(OpError::Aborted(reason));
+            }
+
             // Execute all operations in the batch for this iteration
             for op in &self.ops {
-                let result = op.perform(dry, wet).await?;
-                results.push(result);
+                // Check abort before each op
+                if dry.is_aborted() {
+                    let reason = dry.abort_reason()
+                        .cloned()
+                        .unwrap_or_else(|| "Loop operation aborted".to_string());
+                    return Err(OpError::Aborted(reason));
+                }
+                
+                match op.perform(dry, wet).await {
+                    Ok(result) => {
+                        results.push(result);
+                        
+                        // Check if continue flag was set, skip rest of this iteration
+                        if dry.is_continue_loop() {
+                            dry.clear_continue_loop();
+                            break; // Break out of ops loop, continue to next iteration
+                        }
+                    }
+                    Err(OpError::Aborted(reason)) => {
+                        // Aborted errors should not trigger retries, propagate immediately
+                        return Err(OpError::Aborted(reason));
+                    }
+                    Err(error) => {
+                        return Err(error);
+                    }
+                }
             }
 
             // Increment counter and update context
