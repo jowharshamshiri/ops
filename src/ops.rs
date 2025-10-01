@@ -50,6 +50,10 @@ pub fn wrap_nested_op_exception(op_name: &str, error: OpError) -> OpError {
         OpError::BatchFailed(msg) => {
             OpError::BatchFailed(format!("Batch op '{}' failed: {}", op_name, msg))
         },
+        OpError::Aborted(reason) => {
+            // Aborted errors should preserve their nature and not be wrapped as execution failures
+            OpError::Aborted(format!("Op '{}' aborted: {}", op_name, reason))
+        },
         OpError::Other(boxed_error) => {
             OpError::ExecutionFailed(format!("Op '{}' failed: {}", op_name, boxed_error))
         },

@@ -9,6 +9,9 @@ pub mod ops;
 pub mod macros;
 pub mod loop_op;
 
+#[cfg(test)]
+mod control_flow_tests;
+
 pub use contexts::{DryContext, WetContext};
 pub use error::OpError;
 pub use op::Op;

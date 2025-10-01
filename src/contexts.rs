@@ -1,16 +1,36 @@
 use crate::prelude::*;
 use std::collections::HashMap;
 
+/// Control flow flags for ops execution
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ControlFlags {
+    pub aborted: bool,
+    pub abort_reason: Option<String>,
+    pub continue_loop: bool,
+}
+
+impl Default for ControlFlags {
+    fn default() -> Self {
+        Self {
+            aborted: false,
+            abort_reason: None,
+            continue_loop: false,
+        }
+    }
+}
+
 /// DryContext contains only serializable data values
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct DryContext {
     values: HashMap<String, serde_json::Value>,
+    control_flags: ControlFlags,
 }
 
 impl DryContext {
     pub fn new() -> Self {
         Self {
             values: HashMap::new(),
+            control_flags: ControlFlags::default(),
         }
     }
 
@@ -72,6 +92,50 @@ impl DryContext {
 
     pub fn merge(&mut self, other: DryContext) {
         self.values.extend(other.values);
+        // Only merge control flags if they are set in other and not already set in self
+        if other.control_flags.aborted && !self.control_flags.aborted {
+            self.control_flags.aborted = true;
+            self.control_flags.abort_reason = other.control_flags.abort_reason;
+        }
+        if other.control_flags.continue_loop {
+            self.control_flags.continue_loop = true;
+        }
+    }
+    
+    /// Set abort flag with optional reason
+    pub fn set_abort(&mut self, reason: Option<String>) {
+        self.control_flags.aborted = true;
+        self.control_flags.abort_reason = reason;
+    }
+    
+    /// Check if abort flag is set
+    pub fn is_aborted(&self) -> bool {
+        self.control_flags.aborted
+    }
+    
+    /// Get abort reason if set
+    pub fn abort_reason(&self) -> Option<&String> {
+        self.control_flags.abort_reason.as_ref()
+    }
+    
+    /// Set continue loop flag
+    pub fn set_continue_loop(&mut self) {
+        self.control_flags.continue_loop = true;
+    }
+    
+    /// Check if continue loop flag is set
+    pub fn is_continue_loop(&self) -> bool {
+        self.control_flags.continue_loop
+    }
+    
+    /// Clear continue loop flag (typically called by loop op after processing)
+    pub fn clear_continue_loop(&mut self) {
+        self.control_flags.continue_loop = false;
+    }
+    
+    /// Clear all control flags
+    pub fn clear_control_flags(&mut self) {
+        self.control_flags = ControlFlags::default();
     }
 }
 
@@ -274,5 +338,65 @@ mod tests {
         let err = result.unwrap_err().to_string();
         assert!(err.contains("not found"));
         assert!(!err.contains("Type mismatch"));
+    }
+
+    #[test]
+    fn test_control_flags() {
+        let mut ctx = DryContext::new();
+        
+        // Test abort functionality
+        assert!(!ctx.is_aborted());
+        assert_eq!(ctx.abort_reason(), None);
+        
+        ctx.set_abort(Some("Test abort reason".to_string()));
+        assert!(ctx.is_aborted());
+        assert_eq!(ctx.abort_reason(), Some(&"Test abort reason".to_string()));
+        
+        // Test continue loop functionality
+        assert!(!ctx.is_continue_loop());
+        ctx.set_continue_loop();
+        assert!(ctx.is_continue_loop());
+        
+        ctx.clear_continue_loop();
+        assert!(!ctx.is_continue_loop());
+        
+        // Test clearing all flags
+        ctx.set_abort(Some("Another reason".to_string()));
+        ctx.set_continue_loop();
+        assert!(ctx.is_aborted());
+        assert!(ctx.is_continue_loop());
+        
+        ctx.clear_control_flags();
+        assert!(!ctx.is_aborted());
+        assert!(!ctx.is_continue_loop());
+        assert_eq!(ctx.abort_reason(), None);
+    }
+
+    #[test]
+    fn test_control_flags_merge() {
+        let mut ctx1 = DryContext::new();
+        let mut ctx2 = DryContext::new();
+        
+        // Set flags in ctx2
+        ctx2.set_abort(Some("Merged abort".to_string()));
+        ctx2.set_continue_loop();
+        
+        // Merge ctx2 into ctx1
+        ctx1.merge(ctx2);
+        
+        assert!(ctx1.is_aborted());
+        assert_eq!(ctx1.abort_reason(), Some(&"Merged abort".to_string()));
+        assert!(ctx1.is_continue_loop());
+        
+        // Test that merge doesn't override existing abort
+        let mut ctx3 = DryContext::new();
+        ctx3.set_abort(Some("Original abort".to_string()));
+        
+        let mut ctx4 = DryContext::new();
+        ctx4.set_abort(Some("New abort".to_string()));
+        
+        ctx3.merge(ctx4);
+        // Should keep the original abort reason since ctx3 was already aborted
+        assert_eq!(ctx3.abort_reason(), Some(&"Original abort".to_string()));
     }
 }

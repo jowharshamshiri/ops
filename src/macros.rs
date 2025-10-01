@@ -215,3 +215,83 @@ macro_rules! repeat {
         }
     };
 }
+
+// Control flow macros
+
+/// Abort macro that sets the abort flag in DryContext
+/// 
+/// This macro should be used when an operation determines that continuing
+/// execution would be futile and should not trigger retries.
+/// 
+/// # Usage
+/// ```
+/// use ops::{abort, DryContext, OpError};
+/// 
+/// fn example_op(dry: &mut DryContext) -> Result<(), OpError> {
+///     abort!(dry);
+/// }
+/// ```
+#[macro_export]
+macro_rules! abort {
+    ($dry:expr) => {
+        {
+            $dry.set_abort(None);
+            return Err($crate::OpError::Aborted("Operation aborted".to_string()));
+        }
+    };
+    ($dry:expr, $reason:expr) => {
+        {
+            let reason_str = $reason.to_string();
+            $dry.set_abort(Some(reason_str.clone()));
+            return Err($crate::OpError::Aborted(reason_str));
+        }
+    };
+}
+
+/// Continue loop macro that sets the continue flag in DryContext
+/// 
+/// This macro should be used within loop operations to skip the rest
+/// of the current iteration, similar to 'continue' in a for loop.
+/// 
+/// # Usage
+/// ```
+/// use ops::{continue_loop, DryContext, OpError};
+/// 
+/// fn example_op(dry: &mut DryContext) -> Result<i32, OpError> {
+///     continue_loop!(dry);
+/// }
+/// ```
+#[macro_export]
+macro_rules! continue_loop {
+    ($dry:expr) => {
+        {
+            $dry.set_continue_loop();
+            return Ok(Default::default()); // Return default value for the op type
+        }
+    };
+}
+
+/// Utility macro to check if operation should be aborted
+/// 
+/// Returns early with Aborted error if abort flag is set
+/// 
+/// # Usage
+/// ```
+/// use ops::{check_abort, DryContext, OpError};
+/// 
+/// fn example_op(dry: &mut DryContext) -> Result<i32, OpError> {
+///     check_abort!(dry);
+///     Ok(42)
+/// }
+/// ```
+#[macro_export]
+macro_rules! check_abort {
+    ($dry:expr) => {
+        if $dry.is_aborted() {
+            let reason = $dry.abort_reason()
+                .cloned()
+                .unwrap_or_else(|| "Operation aborted".to_string());
+            return Err($crate::OpError::Aborted(reason));
+        }
+    };
+}
