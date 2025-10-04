@@ -20,6 +20,7 @@ pub use batch::BatchOp;
 pub use loop_op::LoopOp;
 pub use wrappers::logging::LoggingWrapper;
 pub use wrappers::timeout::TimeBoundWrapper;
+pub use wrappers::validating::ValidatingWrapper;
 pub use ops::{perform, get_caller_op_name, wrap_nested_op_exception};
 
 pub type OpResult<T> = std::result::Result<T, OpError>;
