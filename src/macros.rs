@@ -7,6 +7,15 @@ macro_rules! dry_put {
     };
 }
 
+/// Store a value in dry context using a custom key name
+/// dry_put_key!(dry_context, "custom_key", value)
+#[macro_export]
+macro_rules! dry_put_key {
+    ($ctx:expr, $key:expr, $value:expr) => {
+        $ctx.insert($key, $value)
+    };
+}
+
 /// Retrieve a value from dry context using variable name as key
 /// let var: Type = dry_get!(dry_context, var_name);
 #[macro_export]
@@ -49,6 +58,15 @@ macro_rules! wet_put_ref {
     };
 }
 
+/// Store a reference in wet context using a custom key name
+/// wet_put_ref_key!(wet_context, "custom_key", value);
+#[macro_export]
+macro_rules! wet_put_ref_key {
+    ($ctx:expr, $key:expr, $value:expr) => {
+        $ctx.insert_ref($key, $value)
+    };
+}
+
 /// Store an Arc in wet context without additional wrapping
 /// wet_put_arc!(wet_context, var_name, arc_value);
 #[macro_export]
@@ -58,6 +76,15 @@ macro_rules! wet_put_arc {
     };
     ($ctx:expr, $var:ident) => {
         $ctx.insert_arc(stringify!($var), $var)
+    };
+}
+
+/// Store an Arc in wet context using a custom key name
+/// wet_put_arc_key!(wet_context, "custom_key", arc_value);
+#[macro_export]
+macro_rules! wet_put_arc_key {
+    ($ctx:expr, $key:expr, $value:expr) => {
+        $ctx.insert_arc($key, $value)
     };
 }
 
