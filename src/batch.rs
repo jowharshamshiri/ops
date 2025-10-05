@@ -33,6 +33,17 @@ where
     pub fn is_empty(&self) -> bool {
         self.ops.is_empty()
     }
+    
+    async fn rollback_succeeded_ops(&self, succeeded_ops: &[Arc<dyn Op<T>>], dry: &mut DryContext, wet: &mut WetContext) {
+        // Rollback in reverse order (LIFO)
+        for op in succeeded_ops.iter().rev() {
+            if let Err(rollback_error) = op.rollback(dry, wet).await {
+                error!("Failed to rollback op {}: {}", op.metadata().name, rollback_error);
+            } else {
+                debug!("Successfully rolled back op {}", op.metadata().name);
+            }
+        }
+    }
 }
 
 #[async_trait]
@@ -43,10 +54,13 @@ where
     async fn perform(&self, dry: &mut DryContext, wet: &mut WetContext) -> OpResult<Vec<T>> {
         let mut results = Vec::with_capacity(self.ops.len());
         let mut errors = Vec::new();
+        let mut succeeded_ops = Vec::new(); // Track succeeded ops for rollback
         
         for (index, op) in self.ops.iter().enumerate() {
             // Check if we should abort before executing each op
             if dry.is_aborted() {
+                // Rollback succeeded ops before aborting
+                self.rollback_succeeded_ops(&succeeded_ops, dry, wet).await;
                 let reason = dry.abort_reason()
                     .cloned()
                     .unwrap_or_else(|| "Batch operation aborted".to_string());
@@ -54,15 +68,21 @@ where
             }
             
             match op.perform(dry, wet).await {
-                Ok(result) => results.push(result),
+                Ok(result) => {
+                    results.push(result);
+                    succeeded_ops.push(op.clone());
+                }
                 Err(OpError::Aborted(reason)) => {
-                    // Aborted errors should not trigger retries, propagate immediately
+                    // Rollback succeeded ops before aborting
+                    self.rollback_succeeded_ops(&succeeded_ops, dry, wet).await;
                     return Err(OpError::Aborted(reason));
                 }
                 Err(error) => {
                     if self.continue_on_error {
                         errors.push((index, error));
                     } else {
+                        // Rollback succeeded ops before failing
+                        self.rollback_succeeded_ops(&succeeded_ops, dry, wet).await;
                         return Err(OpError::BatchFailed(
                             format!("Op {}-{} failed: {}", index, op.metadata().name, error)
                         ));
@@ -72,6 +92,7 @@ where
         }
         
         if !errors.is_empty() && !self.continue_on_error {
+            self.rollback_succeeded_ops(&succeeded_ops, dry, wet).await;
             return Err(OpError::BatchFailed(
                 format!("Batch op had {} errors", errors.len())
             ));
@@ -113,6 +134,17 @@ where
         self.max_concurrent = Some(max_concurrent);
         self
     }
+    
+    async fn rollback_succeeded_ops(&self, succeeded_ops: &[Arc<dyn Op<T>>], dry: &mut DryContext, wet: &mut WetContext) {
+        // Rollback in reverse order (LIFO)
+        for op in succeeded_ops.iter().rev() {
+            if let Err(rollback_error) = op.rollback(dry, wet).await {
+                error!("Failed to rollback op {}: {}", op.metadata().name, rollback_error);
+            } else {
+                debug!("Successfully rolled back op {}", op.metadata().name);
+            }
+        }
+    }
 }
 
 #[async_trait]
@@ -125,10 +157,13 @@ where
         // Execute sequentially instead
         let mut results = Vec::with_capacity(self.ops.len());
         let mut errors = Vec::new();
+        let mut succeeded_ops = Vec::new(); // Track succeeded ops for rollback
         
         for (index, op) in self.ops.iter().enumerate() {
             // Check if we should abort before executing each op
             if dry.is_aborted() {
+                // Rollback succeeded ops before aborting
+                self.rollback_succeeded_ops(&succeeded_ops, dry, wet).await;
                 let reason = dry.abort_reason()
                     .cloned()
                     .unwrap_or_else(|| "Parallel batch operation aborted".to_string());
@@ -136,15 +171,21 @@ where
             }
             
             match op.perform(dry, wet).await {
-                Ok(result) => results.push(result),
+                Ok(result) => {
+                    results.push(result);
+                    succeeded_ops.push(op.clone());
+                }
                 Err(OpError::Aborted(reason)) => {
-                    // Aborted errors should not trigger retries, propagate immediately
+                    // Rollback succeeded ops before aborting
+                    self.rollback_succeeded_ops(&succeeded_ops, dry, wet).await;
                     return Err(OpError::Aborted(reason));
                 }
                 Err(error) => {
                     if self.continue_on_error {
                         errors.push((index, error));
                     } else {
+                        // Rollback succeeded ops before failing
+                        self.rollback_succeeded_ops(&succeeded_ops, dry, wet).await;
                         return Err(OpError::BatchFailed(
                             format!("Op {}-{} failed: {}", index, op.metadata().name, error)
                         ));
@@ -154,6 +195,7 @@ where
         }
         
         if !errors.is_empty() && !self.continue_on_error {
+            self.rollback_succeeded_ops(&succeeded_ops, dry, wet).await;
             return Err(OpError::BatchFailed(
                 format!("Parallel batch op had {} errors", errors.len())
             ));
@@ -404,5 +446,224 @@ mod tests {
             assert!(required_services.contains(&"service_b"));
             assert!(required_services.contains(&"shared_service")); // Only counted once!
         }
+    }
+    
+    #[tokio::test]
+    async fn test_batch_rollback_on_failure() {
+        use std::sync::{Arc, Mutex};
+        
+        struct RollbackTrackingOp {
+            id: u32,
+            should_fail: bool,
+            performed: Arc<Mutex<bool>>,
+            rolled_back: Arc<Mutex<bool>>,
+        }
+        
+        #[async_trait]
+        impl Op<u32> for RollbackTrackingOp {
+            async fn perform(&self, _dry: &mut DryContext, _wet: &mut WetContext) -> OpResult<u32> {
+                *self.performed.lock().unwrap() = true;
+                if self.should_fail {
+                    Err(OpError::ExecutionFailed(format!("Op {} failed", self.id)))
+                } else {
+                    Ok(self.id)
+                }
+            }
+            
+            async fn rollback(&self, _dry: &mut DryContext, _wet: &mut WetContext) -> OpResult<()> {
+                *self.rolled_back.lock().unwrap() = true;
+                Ok(())
+            }
+            
+            fn metadata(&self) -> OpMetadata {
+                OpMetadata::builder(&format!("RollbackTrackingOp{}", self.id)).build()
+            }
+        }
+        
+        // Create tracking state
+        let op1_performed = Arc::new(Mutex::new(false));
+        let op1_rolled_back = Arc::new(Mutex::new(false));
+        let op2_performed = Arc::new(Mutex::new(false));
+        let op2_rolled_back = Arc::new(Mutex::new(false));
+        let op3_performed = Arc::new(Mutex::new(false));
+        let op3_rolled_back = Arc::new(Mutex::new(false));
+        
+        let ops = vec![
+            Arc::new(RollbackTrackingOp {
+                id: 1,
+                should_fail: false,
+                performed: op1_performed.clone(),
+                rolled_back: op1_rolled_back.clone(),
+            }) as Arc<dyn Op<u32>>,
+            Arc::new(RollbackTrackingOp {
+                id: 2,
+                should_fail: false,
+                performed: op2_performed.clone(),
+                rolled_back: op2_rolled_back.clone(),
+            }) as Arc<dyn Op<u32>>,
+            Arc::new(RollbackTrackingOp {
+                id: 3,
+                should_fail: true, // This will fail and trigger rollback
+                performed: op3_performed.clone(),
+                rolled_back: op3_rolled_back.clone(),
+            }) as Arc<dyn Op<u32>>,
+        ];
+        
+        let batch = BatchOp::new(ops);
+        let mut dry = DryContext::new();
+        let mut wet = WetContext::new();
+        
+        // Execute batch - should fail on op3
+        let result = batch.perform(&mut dry, &mut wet).await;
+        assert!(result.is_err());
+        
+        // Verify execution state
+        assert!(*op1_performed.lock().unwrap(), "Op1 should have been performed");
+        assert!(*op2_performed.lock().unwrap(), "Op2 should have been performed");
+        assert!(*op3_performed.lock().unwrap(), "Op3 should have been performed (and failed)");
+        
+        // Verify rollback state - only succeeded ops should be rolled back
+        assert!(*op1_rolled_back.lock().unwrap(), "Op1 should have been rolled back");
+        assert!(*op2_rolled_back.lock().unwrap(), "Op2 should have been rolled back");
+        assert!(!*op3_rolled_back.lock().unwrap(), "Op3 should NOT have been rolled back (it failed)");
+    }
+    
+    #[tokio::test]
+    async fn test_batch_rollback_order() {
+        use std::sync::{Arc, Mutex};
+        
+        struct OrderTrackingOp {
+            id: u32,
+            rollback_order: Arc<Mutex<Vec<u32>>>,
+        }
+        
+        #[async_trait]
+        impl Op<u32> for OrderTrackingOp {
+            async fn perform(&self, _dry: &mut DryContext, _wet: &mut WetContext) -> OpResult<u32> {
+                Ok(self.id)
+            }
+            
+            async fn rollback(&self, _dry: &mut DryContext, _wet: &mut WetContext) -> OpResult<()> {
+                self.rollback_order.lock().unwrap().push(self.id);
+                Ok(())
+            }
+            
+            fn metadata(&self) -> OpMetadata {
+                OpMetadata::builder(&format!("OrderTrackingOp{}", self.id)).build()
+            }
+        }
+        
+        struct FailingOp;
+        
+        #[async_trait]
+        impl Op<u32> for FailingOp {
+            async fn perform(&self, _dry: &mut DryContext, _wet: &mut WetContext) -> OpResult<u32> {
+                Err(OpError::ExecutionFailed("Intentional failure".to_string()))
+            }
+            
+            fn metadata(&self) -> OpMetadata {
+                OpMetadata::builder("FailingOp").build()
+            }
+        }
+        
+        let rollback_order = Arc::new(Mutex::new(Vec::new()));
+        
+        let ops = vec![
+            Arc::new(OrderTrackingOp {
+                id: 1,
+                rollback_order: rollback_order.clone(),
+            }) as Arc<dyn Op<u32>>,
+            Arc::new(OrderTrackingOp {
+                id: 2,
+                rollback_order: rollback_order.clone(),
+            }) as Arc<dyn Op<u32>>,
+            Arc::new(OrderTrackingOp {
+                id: 3,
+                rollback_order: rollback_order.clone(),
+            }) as Arc<dyn Op<u32>>,
+            Arc::new(FailingOp) as Arc<dyn Op<u32>>, // Fails, triggering rollback
+        ];
+        
+        let batch = BatchOp::new(ops);
+        let mut dry = DryContext::new();
+        let mut wet = WetContext::new();
+        
+        // Execute batch - should fail on FailingOp
+        let result = batch.perform(&mut dry, &mut wet).await;
+        assert!(result.is_err());
+        
+        // Verify rollback order is LIFO (reverse of execution order)
+        let order = rollback_order.lock().unwrap();
+        assert_eq!(*order, vec![3, 2, 1], "Rollback should happen in reverse order");
+    }
+    
+    #[tokio::test]
+    async fn test_parallel_batch_rollback() {
+        use std::sync::{Arc, Mutex};
+        
+        struct RollbackTrackingOp {
+            id: u32,
+            should_fail: bool,
+            performed: Arc<Mutex<bool>>,
+            rolled_back: Arc<Mutex<bool>>,
+        }
+        
+        #[async_trait]
+        impl Op<u32> for RollbackTrackingOp {
+            async fn perform(&self, _dry: &mut DryContext, _wet: &mut WetContext) -> OpResult<u32> {
+                *self.performed.lock().unwrap() = true;
+                if self.should_fail {
+                    Err(OpError::ExecutionFailed(format!("Op {} failed", self.id)))
+                } else {
+                    Ok(self.id)
+                }
+            }
+            
+            async fn rollback(&self, _dry: &mut DryContext, _wet: &mut WetContext) -> OpResult<()> {
+                *self.rolled_back.lock().unwrap() = true;
+                Ok(())
+            }
+            
+            fn metadata(&self) -> OpMetadata {
+                OpMetadata::builder(&format!("RollbackTrackingOp{}", self.id)).build()
+            }
+        }
+        
+        // Create tracking state
+        let op1_performed = Arc::new(Mutex::new(false));
+        let op1_rolled_back = Arc::new(Mutex::new(false));
+        let op2_performed = Arc::new(Mutex::new(false));
+        let op2_rolled_back = Arc::new(Mutex::new(false));
+        
+        let ops = vec![
+            Arc::new(RollbackTrackingOp {
+                id: 1,
+                should_fail: false,
+                performed: op1_performed.clone(),
+                rolled_back: op1_rolled_back.clone(),
+            }) as Arc<dyn Op<u32>>,
+            Arc::new(RollbackTrackingOp {
+                id: 2,
+                should_fail: true, // This will fail and trigger rollback
+                performed: op2_performed.clone(),
+                rolled_back: op2_rolled_back.clone(),
+            }) as Arc<dyn Op<u32>>,
+        ];
+        
+        let batch = ParallelBatchOp::new(ops);
+        let mut dry = DryContext::new();
+        let mut wet = WetContext::new();
+        
+        // Execute batch - should fail on op2
+        let result = batch.perform(&mut dry, &mut wet).await;
+        assert!(result.is_err());
+        
+        // Verify execution state
+        assert!(*op1_performed.lock().unwrap(), "Op1 should have been performed");
+        assert!(*op2_performed.lock().unwrap(), "Op2 should have been performed (and failed)");
+        
+        // Verify rollback state - only succeeded ops should be rolled back
+        assert!(*op1_rolled_back.lock().unwrap(), "Op1 should have been rolled back");
+        assert!(!*op2_rolled_back.lock().unwrap(), "Op2 should NOT have been rolled back (it failed)");
     }
 }

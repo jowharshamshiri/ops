@@ -203,10 +203,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_loop_op_with_continue() {
-        let ops: Vec<Box<dyn Op<i32>>> = vec![
-            Box::new(ContinueTestOp::new(false, 10)), // Should execute
-            Box::new(ContinueTestOp::new(true, 20)),  // Should continue, skip rest
-            Box::new(AbortTestOp::new(false, None)),  // Should not execute due to continue
+        let ops: Vec<Arc<dyn Op<i32>>> = vec![
+            Arc::new(ContinueTestOp::new(false, 10)), // Should execute
+            Arc::new(ContinueTestOp::new(true, 20)),  // Should continue, skip rest
+            Arc::new(AbortTestOp::new(false, None)),  // Should not execute due to continue
         ];
         
         let loop_op = LoopOp::new("test_counter".to_string(), 2, ops);
@@ -230,10 +230,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_loop_op_with_abort() {
-        let ops: Vec<Box<dyn Op<i32>>> = vec![
-            Box::new(AbortTestOp::new(false, None)),
-            Box::new(AbortTestOp::new(true, Some("Loop abort".to_string()))),
-            Box::new(AbortTestOp::new(false, None)), // Should not execute
+        let ops: Vec<Arc<dyn Op<i32>>> = vec![
+            Arc::new(AbortTestOp::new(false, None)),
+            Arc::new(AbortTestOp::new(true, Some("Loop abort".to_string()))),
+            Arc::new(AbortTestOp::new(false, None)), // Should not execute
         ];
         
         let loop_op = LoopOp::new("test_counter".to_string(), 3, ops);
@@ -252,8 +252,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_loop_op_with_pre_existing_abort() {
-        let ops: Vec<Box<dyn Op<i32>>> = vec![
-            Box::new(AbortTestOp::new(false, None)),
+        let ops: Vec<Arc<dyn Op<i32>>> = vec![
+            Arc::new(AbortTestOp::new(false, None)),
         ];
         
         let loop_op = LoopOp::new("test_counter".to_string(), 2, ops);
@@ -284,8 +284,8 @@ mod tests {
         ];
         
         // Use the batch in a loop
-        let loop_ops: Vec<Box<dyn Op<Vec<i32>>>> = vec![
-            Box::new(BatchOp::new(batch_ops)),
+        let loop_ops: Vec<Arc<dyn Op<Vec<i32>>>> = vec![
+            Arc::new(BatchOp::new(batch_ops)),
         ];
         
         let loop_op = LoopOp::new("complex_counter".to_string(), 2, loop_ops);

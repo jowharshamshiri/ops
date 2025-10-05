@@ -7,6 +7,13 @@ pub trait Op<T>: Send + Sync {
     async fn perform(&self, dry: &mut DryContext, wet: &mut WetContext) -> OpResult<T>;
     
     fn metadata(&self) -> OpMetadata;
+    
+    /// Optional rollback method for ops that need custom cleanup logic.
+    /// Default implementation is a no-op for backward compatibility.
+    /// Called automatically by batch operations when a later op fails.
+    async fn rollback(&self, _dry: &mut DryContext, _wet: &mut WetContext) -> OpResult<()> {
+        Ok(())
+    }
 }
 
 
@@ -74,6 +81,78 @@ mod tests {
         
         let result = op.perform(&mut dry, &mut wet).await;
         assert_eq!(result.unwrap(), "Hello, World!");
+    }
+    
+    #[tokio::test]
+    async fn test_op_default_rollback() {
+        struct SimpleOp;
+        
+        #[async_trait]
+        impl Op<()> for SimpleOp {
+            async fn perform(&self, _dry: &mut DryContext, _wet: &mut WetContext) -> OpResult<()> {
+                Ok(())
+            }
+            
+            fn metadata(&self) -> OpMetadata {
+                OpMetadata::builder("SimpleOp").build()
+            }
+        }
+        
+        let op = SimpleOp;
+        let mut dry = DryContext::new();
+        let mut wet = WetContext::new();
+        
+        // Default rollback should be a no-op and succeed
+        let result = op.rollback(&mut dry, &mut wet).await;
+        assert!(result.is_ok());
+    }
+    
+    #[tokio::test]
+    async fn test_op_custom_rollback() {
+        use std::sync::{Arc, Mutex};
+        
+        struct RollbackTrackingOp {
+            performed: Arc<Mutex<bool>>,
+            rolled_back: Arc<Mutex<bool>>,
+        }
+        
+        #[async_trait]
+        impl Op<()> for RollbackTrackingOp {
+            async fn perform(&self, _dry: &mut DryContext, _wet: &mut WetContext) -> OpResult<()> {
+                *self.performed.lock().unwrap() = true;
+                Ok(())
+            }
+            
+            async fn rollback(&self, _dry: &mut DryContext, _wet: &mut WetContext) -> OpResult<()> {
+                *self.rolled_back.lock().unwrap() = true;
+                Ok(())
+            }
+            
+            fn metadata(&self) -> OpMetadata {
+                OpMetadata::builder("RollbackTrackingOp").build()
+            }
+        }
+        
+        let performed = Arc::new(Mutex::new(false));
+        let rolled_back = Arc::new(Mutex::new(false));
+        
+        let op = RollbackTrackingOp {
+            performed: performed.clone(),
+            rolled_back: rolled_back.clone(),
+        };
+        
+        let mut dry = DryContext::new();
+        let mut wet = WetContext::new();
+        
+        // Perform the operation
+        op.perform(&mut dry, &mut wet).await.unwrap();
+        assert!(*performed.lock().unwrap());
+        assert!(!*rolled_back.lock().unwrap());
+        
+        // Rollback the operation
+        op.rollback(&mut dry, &mut wet).await.unwrap();
+        assert!(*performed.lock().unwrap());
+        assert!(*rolled_back.lock().unwrap());
     }
     
 }
