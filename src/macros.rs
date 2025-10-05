@@ -194,9 +194,9 @@ macro_rules! repeat {
                 }
             }
             
-            fn create_ops() -> Vec<Box<dyn $crate::Op<$T>>> {
+            fn create_ops() -> Vec<std::sync::Arc<dyn $crate::Op<$T>>> {
                 vec![
-                    $(Box::new($op)),+
+                    $(std::sync::Arc::new($op)),+
                 ]
             }
         }
