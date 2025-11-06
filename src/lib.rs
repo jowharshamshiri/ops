@@ -8,6 +8,7 @@ pub mod wrappers;
 pub mod ops;
 pub mod macros;
 pub mod loop_op;
+pub mod structured_queries;
 
 #[cfg(test)]
 mod control_flow_tests;
@@ -22,6 +23,8 @@ pub use wrappers::logging::LoggingWrapper;
 pub use wrappers::timeout::TimeBoundWrapper;
 pub use wrappers::validating::ValidatingWrapper;
 pub use ops::{perform, get_caller_op_name, wrap_nested_op_exception};
+pub use macros::AggregationStrategy;
+pub use structured_queries::{TableOfContents, TocEntry, TocMetadata, FlatTocEntry, generate_toc_schema};
 
 pub type OpResult<T> = std::result::Result<T, OpError>;
 

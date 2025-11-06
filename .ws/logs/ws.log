@@ -104,3 +104,37 @@
 [2025-09-15 11:10:56.933 INFO  workspace::scrap] Scrapped file: s.rs -> .scrap/s.rs
 [2025-09-15 11:10:56.933 INFO  workspace::scrap] Scrapped file: s.rs -> .scrap/s.rs
 [2025-09-15 11:10:56.933 INFO  ws] Workspace tool completed successfully
+[2025-10-24 12:40:43.127 INFO  workspace::logging] Logging initialized: /Users/bahram/ws/prj/ops/.ws/logs/ws.log
+[2025-10-24 12:40:43.128 INFO  workspace::logging] Logging initialized: /Users/bahram/ws/prj/ops/.ws/logs/ws.log
+[2025-10-24 12:40:43.128 DEBUG workspace::logging] Debug logging enabled, console level: Warn
+[2025-10-24 12:40:43.128 DEBUG workspace::logging] Debug logging enabled, console level: Warn
+[2025-10-24 12:40:43.128 INFO  workspace::logging] Workspace v0.62.182680
+[2025-10-24 12:40:43.128 INFO  workspace::logging] Workspace v0.62.182680
+[2025-10-24 12:40:43.128 INFO  ws] Starting workspace tool suite
+[2025-10-24 12:40:43.140 INFO  workspace::logging] Starting update: no_git: false, git_add: false
+[2025-10-24 12:40:43.140 INFO  workspace::logging] Starting update: no_git: false, git_add: false
+[2025-10-24 12:40:43.218 INFO  workspace::entities::database] Database indexes created successfully
+[2025-10-24 12:40:43.218 INFO  workspace::entities::database] Database indexes created successfully
+[2025-10-24 12:40:43.218 INFO  workspace::entities::database] Database tables initialized successfully
+[2025-10-24 12:40:43.219 INFO  workspace::entities::database] Database tables initialized successfully
+[2025-10-24 12:40:43.221 INFO  workspace::entities::database] Setting initial schema version to 1
+[2025-10-24 12:40:43.221 INFO  workspace::entities::database] Setting initial schema version to 1
+[2025-10-24 12:40:43.234 INFO  workspace::entities::database] Database indexes created successfully
+[2025-10-24 12:40:43.234 INFO  workspace::entities::database] Database indexes created successfully
+[2025-10-24 12:40:43.234 INFO  workspace::entities::database] Database tables initialized successfully
+[2025-10-24 12:40:43.234 INFO  workspace::entities::database] Database tables initialized successfully
+[2025-10-24 12:40:43.311 INFO  ws] Version updated to: 0.24.44004
+[2025-10-24 12:40:43.371 INFO  workspace::entities::database] Database indexes created successfully
+[2025-10-24 12:40:43.371 INFO  workspace::entities::database] Database indexes created successfully
+[2025-10-24 12:40:43.371 INFO  workspace::entities::database] Database tables initialized successfully
+[2025-10-24 12:40:43.371 INFO  workspace::entities::database] Database tables initialized successfully
+[2025-10-24 12:40:43.435 INFO  workspace::st8::st8_common] Staged version file: version.txt
+[2025-10-24 12:40:43.435 INFO  workspace::st8::st8_common] Staged version file: version.txt
+[2025-10-24 12:40:43.449 INFO  workspace::st8::st8_common] Staged project file: /Users/bahram/ws/prj/ops/Cargo.toml
+[2025-10-24 12:40:43.449 INFO  workspace::st8::st8_common] Staged project file: /Users/bahram/ws/prj/ops/Cargo.toml
+[2025-10-24 12:40:43.449 INFO  workspace::st8::st8_common] Updated project files: /Users/bahram/ws/prj/ops/Cargo.toml
+[2025-10-24 12:40:43.449 INFO  workspace::st8::st8_common] Updated project files: /Users/bahram/ws/prj/ops/Cargo.toml
+[2025-10-24 12:40:43.449 INFO  ws] Updated version file: version.txt
+[2025-10-24 12:40:43.450 INFO  workspace::logging] Completed update in 0.31s
+[2025-10-24 12:40:43.450 INFO  workspace::logging] Completed update in 0.31s
+[2025-10-24 12:40:43.450 INFO  ws] Workspace tool completed successfully

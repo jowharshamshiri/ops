@@ -56,13 +56,13 @@ impl Op<Vec<String>> for ScanDirectoryOp {
             println!("✓ Successfully retrieved filesystem_service: {}", filesystem_service.base_path);
             
             // Simulate discovering files
-            let discovered_file_paths = vec![
+            let tracked_file_paths = vec![
                 "/path/to/file1.txt".to_string(),
                 "/path/to/file2.txt".to_string(),
             ];
-            println!("✓ Discovered {} files", discovered_file_paths.len());
+            println!("✓ Discovered {} files", tracked_file_paths.len());
             
-            Ok(discovered_file_paths)
+            Ok(tracked_file_paths)
         } else {
             println!("✗ filesystem_service reference NOT found in wet context");
             Err(OpError::ExecutionFailed("filesystem_service not found".to_string()))
@@ -83,12 +83,12 @@ struct ScanDirectoryWrapperOp;
 impl Op<()> for ScanDirectoryWrapperOp {
     async fn perform(&self, dry: &mut DryContext, wet: &mut WetContext) -> OpResult<()> {
         let scan_op = ScanDirectoryOp;
-        let discovered_files = scan_op.perform(dry, wet).await?;
+        let tracked_files = scan_op.perform(dry, wet).await?;
         
         // In a real implementation, you'd need a way to store this back to the dry context
         // For now, just print the results
-        println!("✓ ScanDirectoryWrapper found {} files:", discovered_files.len());
-        for file in &discovered_files {
+        println!("✓ ScanDirectoryWrapper found {} files:", tracked_files.len());
+        for file in &tracked_files {
             println!("  - {}", file);
         }
         
@@ -151,10 +151,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Test individual op execution
     println!("6. Testing individual op execution...");
     let scan_op = ScanDirectoryOp;
-    let discovered_files = scan_op.perform(&mut dry, &mut wet).await?;
+    let tracked_files = scan_op.perform(&mut dry, &mut wet).await?;
     
-    println!("✓ Found {} discovered files:", discovered_files.len());
-    for path in &discovered_files {
+    println!("✓ Found {} discovered files:", tracked_files.len());
+    for path in &tracked_files {
         println!("  - {}", path);
     }
     

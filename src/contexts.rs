@@ -6,7 +6,6 @@ use std::collections::HashMap;
 pub struct ControlFlags {
     pub aborted: bool,
     pub abort_reason: Option<String>,
-    pub continue_loop: bool,
 }
 
 impl Default for ControlFlags {
@@ -14,7 +13,6 @@ impl Default for ControlFlags {
         Self {
             aborted: false,
             abort_reason: None,
-            continue_loop: false,
         }
     }
 }
@@ -97,9 +95,6 @@ impl DryContext {
             self.control_flags.aborted = true;
             self.control_flags.abort_reason = other.control_flags.abort_reason;
         }
-        if other.control_flags.continue_loop {
-            self.control_flags.continue_loop = true;
-        }
     }
     
     /// Set abort flag with optional reason
@@ -118,20 +113,7 @@ impl DryContext {
         self.control_flags.abort_reason.as_ref()
     }
     
-    /// Set continue loop flag
-    pub fn set_continue_loop(&mut self) {
-        self.control_flags.continue_loop = true;
-    }
     
-    /// Check if continue loop flag is set
-    pub fn is_continue_loop(&self) -> bool {
-        self.control_flags.continue_loop
-    }
-    
-    /// Clear continue loop flag (typically called by loop op after processing)
-    pub fn clear_continue_loop(&mut self) {
-        self.control_flags.continue_loop = false;
-    }
     
     /// Clear all control flags
     pub fn clear_control_flags(&mut self) {
@@ -352,23 +334,12 @@ mod tests {
         assert!(ctx.is_aborted());
         assert_eq!(ctx.abort_reason(), Some(&"Test abort reason".to_string()));
         
-        // Test continue loop functionality
-        assert!(!ctx.is_continue_loop());
-        ctx.set_continue_loop();
-        assert!(ctx.is_continue_loop());
-        
-        ctx.clear_continue_loop();
-        assert!(!ctx.is_continue_loop());
-        
         // Test clearing all flags
         ctx.set_abort(Some("Another reason".to_string()));
-        ctx.set_continue_loop();
         assert!(ctx.is_aborted());
-        assert!(ctx.is_continue_loop());
         
         ctx.clear_control_flags();
         assert!(!ctx.is_aborted());
-        assert!(!ctx.is_continue_loop());
         assert_eq!(ctx.abort_reason(), None);
     }
 
@@ -379,14 +350,12 @@ mod tests {
         
         // Set flags in ctx2
         ctx2.set_abort(Some("Merged abort".to_string()));
-        ctx2.set_continue_loop();
         
         // Merge ctx2 into ctx1
         ctx1.merge(ctx2);
         
         assert!(ctx1.is_aborted());
         assert_eq!(ctx1.abort_reason(), Some(&"Merged abort".to_string()));
-        assert!(ctx1.is_continue_loop());
         
         // Test that merge doesn't override existing abort
         let mut ctx3 = DryContext::new();
