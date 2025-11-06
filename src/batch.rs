@@ -6,6 +6,15 @@ pub struct BatchOp<T> {
     continue_on_error: bool,
 }
 
+impl<T> std::fmt::Debug for BatchOp<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("BatchOp")
+            .field("ops_count", &self.ops.len())
+            .field("continue_on_error", &self.continue_on_error)
+            .finish()
+    }
+}
+
 impl<T> BatchOp<T>
 where
     T: Send + Sync + 'static,

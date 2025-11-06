@@ -124,11 +124,18 @@ mod tests {
         let mut dry = DryContext::new();
         let mut wet = WetContext::new();
         
+        // Set up a loop context for the continue_loop macro to work
+        let loop_id = "test_loop_123";
+        dry.insert("__current_loop_id", loop_id.to_string());
+        
         let op = ContinueTestOp::new(true, 99);
         let result = op.perform(&mut dry, &mut wet).await;
         
         assert!(result.is_ok());
-        assert!(dry.is_continue_loop());
+        
+        // Check that the scoped continue flag was set
+        let continue_var = format!("__continue_loop_{}", loop_id);
+        assert!(dry.get::<bool>(&continue_var).unwrap_or(false));
         assert_eq!(result.unwrap(), 0); // Default value for i32
     }
 
@@ -223,9 +230,6 @@ mod tests {
         // Iteration 2: [10, 0] (continue after second op, but it returns 0)  
         assert_eq!(results.len(), 4);
         assert_eq!(results, vec![10, 0, 10, 0]);
-        
-        // Continue flag should be cleared
-        assert!(!dry.is_continue_loop());
     }
 
     #[tokio::test]

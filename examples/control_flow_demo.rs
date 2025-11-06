@@ -85,10 +85,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n2. Loop operation with continue:");
     dry.clear_control_flags(); // Reset control flags
     
-    let loop_ops: Vec<Box<dyn Op<i32>>> = vec![
-        Box::new(ConditionalContinueOp { should_continue: false, value: 100 }),
-        Box::new(ConditionalContinueOp { should_continue: true, value: 200 }), // Will continue
-        Box::new(ConditionalAbortOp { should_abort: false, value: 300 }), // Won't execute due to continue
+    let loop_ops: Vec<std::sync::Arc<dyn Op<i32>>> = vec![
+        std::sync::Arc::new(ConditionalContinueOp { should_continue: false, value: 100 }),
+        std::sync::Arc::new(ConditionalContinueOp { should_continue: true, value: 200 }), // Will continue
+        std::sync::Arc::new(ConditionalAbortOp { should_abort: false, value: 300 }), // Won't execute due to continue
     ];
     
     let loop_op = LoopOp::new("demo_counter".to_string(), 3, loop_ops);

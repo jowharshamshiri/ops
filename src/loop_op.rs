@@ -7,6 +7,10 @@ pub struct LoopOp<T> {
     counter_var: String,
     limit: usize,
     ops: Vec<Arc<dyn Op<T>>>,
+    loop_id: String,
+    continue_var: String,
+    break_var: String,
+    continue_on_error: bool,
 }
 
 impl<T> LoopOp<T> 
@@ -20,16 +24,29 @@ where
     /// * `limit` - Maximum number of iterations to perform
     /// * `ops` - Vector of operations to execute in each iteration
     pub fn new(counter_var: String, limit: usize, ops: Vec<Arc<dyn Op<T>>>) -> Self {
+		// Generate a unique loop ID for scoped control flow variables
+		// Keep the preceding double underscores to minimize risk of collisions
+        let loop_id = ::uuid::Uuid::new_v4().to_string();
         Self {
             counter_var,
             limit,
             ops,
+            continue_var: format!("__continue_loop_{}", loop_id),
+            break_var: format!("__break_loop_{}", loop_id),
+            loop_id,
+            continue_on_error: false,
         }
     }
 
     /// Add an operation to the loop
     pub fn add_op(mut self, op: Arc<dyn Op<T>>) -> Self {
         self.ops.push(op);
+        self
+    }
+    
+    /// Set whether to continue on error
+    pub fn with_continue_on_error(mut self, continue_on_error: bool) -> Self {
+        self.continue_on_error = continue_on_error;
         self
     }
 
@@ -69,6 +86,9 @@ where
             self.set_counter(dry, counter);
         }
 
+        // Set loop context for scoped control flow
+        dry.insert("__current_loop_id", &self.loop_id);
+
         while counter < self.limit {
             // Check if we should abort before each iteration
             if dry.is_aborted() {
@@ -77,6 +97,10 @@ where
                     .unwrap_or_else(|| "Loop operation aborted".to_string());
                 return Err(OpError::Aborted(reason));
             }
+
+            // Clear scoped control flags for this iteration
+            dry.insert(&self.continue_var, false);
+            dry.insert(&self.break_var, false);
 
             // Track succeeded ops in this iteration for potential rollback
             let mut iteration_succeeded_ops = Vec::new();
@@ -98,10 +122,16 @@ where
                         results.push(result);
                         iteration_succeeded_ops.push(op.clone());
                         
-                        // Check if continue flag was set, skip rest of this iteration
-                        if dry.is_continue_loop() {
-                            dry.clear_continue_loop();
+                        // Check scoped continue flag
+                        if dry.get::<bool>(&self.continue_var).unwrap_or(false) {
+                            dry.insert(&self.continue_var, false); // Clear flag
                             break; // Break out of ops loop, continue to next iteration
+                        }
+                        
+                        // Check scoped break flag
+                        if dry.get::<bool>(&self.break_var).unwrap_or(false) {
+                            dry.insert(&self.break_var, false); // Clear flag
+                            return Ok(results); // Break out of entire loop
                         }
                     }
                     Err(OpError::Aborted(reason)) => {
@@ -110,9 +140,18 @@ where
                         return Err(OpError::Aborted(reason));
                     }
                     Err(error) => {
-                        // Rollback succeeded ops from current iteration before failing
-                        self.rollback_iteration_ops(&iteration_succeeded_ops, dry, wet).await;
-                        return Err(error);
+                        if self.continue_on_error {
+                            // Log the error and continue with next iteration
+                            warn!("Operation {} failed in loop iteration {}: {}. Continuing with next iteration.", 
+                                  op.metadata().name, counter, error);
+                            // Rollback succeeded ops from current iteration
+                            self.rollback_iteration_ops(&iteration_succeeded_ops, dry, wet).await;
+                            break; // Break out of ops loop, continue to next iteration
+                        } else {
+                            // Rollback succeeded ops from current iteration before failing
+                            self.rollback_iteration_ops(&iteration_succeeded_ops, dry, wet).await;
+                            return Err(error);
+                        }
                     }
                 }
             }
@@ -126,8 +165,13 @@ where
     }
     
     fn metadata(&self) -> OpMetadata {
+        let description = if self.continue_on_error {
+            format!("Loop {} times over {} ops (continue on error)", self.limit, self.ops.len())
+        } else {
+            format!("Loop {} times over {} ops", self.limit, self.ops.len())
+        };
         OpMetadata::builder("LoopOp")
-            .description(format!("Loop {} times over {} ops", self.limit, self.ops.len()))
+            .description(description)
             .build()
     }
 }
@@ -529,6 +573,88 @@ mod tests {
         
         // Verify rollback: only op1 from iteration 1 should be rolled back
         // (op2 failed so it doesn't get rolled back, and iteration 0 was successful so no rollback)
+        let rolled_back = rolled_back_iterations.lock().unwrap();
+        assert_eq!(*rolled_back, vec![(1, 1)], "Should only rollback op1 from failed iteration 1");
+    }
+
+    #[tokio::test]
+    async fn test_loop_op_continue_on_error() {
+        use std::sync::{Arc, Mutex};
+        
+        struct ContinueOnErrorOp {
+            id: u32,
+            fail_on_iteration: Option<usize>,
+            performed_iterations: Arc<Mutex<Vec<(u32, usize)>>>, // (op_id, iteration)
+            rolled_back_iterations: Arc<Mutex<Vec<(u32, usize)>>>, // (op_id, iteration)
+        }
+        
+        #[async_trait]
+        impl Op<u32> for ContinueOnErrorOp {
+            async fn perform(&self, dry: &mut DryContext, _wet: &mut WetContext) -> OpResult<u32> {
+                let counter: usize = dry.get("test_counter").unwrap_or(0);
+                self.performed_iterations.lock().unwrap().push((self.id, counter));
+                
+                if let Some(fail_iteration) = self.fail_on_iteration {
+                    if counter == fail_iteration {
+                        return Err(OpError::ExecutionFailed(format!("Op {} failed on iteration {}", self.id, counter)));
+                    }
+                }
+                
+                Ok(self.id)
+            }
+            
+            async fn rollback(&self, dry: &mut DryContext, _wet: &mut WetContext) -> OpResult<()> {
+                let counter: usize = dry.get("test_counter").unwrap_or(0);
+                self.rolled_back_iterations.lock().unwrap().push((self.id, counter));
+                Ok(())
+            }
+            
+            fn metadata(&self) -> OpMetadata {
+                OpMetadata::builder(&format!("ContinueOnErrorOp{}", self.id)).build()
+            }
+        }
+        
+        let performed_iterations = Arc::new(Mutex::new(Vec::new()));
+        let rolled_back_iterations = Arc::new(Mutex::new(Vec::new()));
+        
+        // Create ops: first succeeds, second fails on iteration 1
+        let ops = vec![
+            Arc::new(ContinueOnErrorOp {
+                id: 1,
+                fail_on_iteration: None, // Never fails
+                performed_iterations: performed_iterations.clone(),
+                rolled_back_iterations: rolled_back_iterations.clone(),
+            }) as Arc<dyn Op<u32>>,
+            Arc::new(ContinueOnErrorOp {
+                id: 2,
+                fail_on_iteration: Some(1), // Fail on second iteration (index 1)
+                performed_iterations: performed_iterations.clone(),
+                rolled_back_iterations: rolled_back_iterations.clone(),
+            }) as Arc<dyn Op<u32>>,
+        ];
+        
+        let loop_op = LoopOp::new("test_counter".to_string(), 3, ops)
+            .with_continue_on_error(true);
+        let mut dry = DryContext::new();
+        let mut wet = WetContext::new();
+        
+        // Execute loop - should continue despite op2 failure in iteration 1
+        let result = loop_op.perform(&mut dry, &mut wet).await;
+        assert!(result.is_ok());
+        let results = result.unwrap();
+        
+        // Verify execution: should have run:
+        // Iteration 0: op1, op2 (both succeed) -> results: [1, 2]
+        // Iteration 1: op1 (succeeds), op2 (fails, iteration continues) -> results: [1, 2, 1]
+        // Iteration 2: op1, op2 (both succeed) -> results: [1, 2, 1, 1, 2]
+        let performed = performed_iterations.lock().unwrap();
+        assert_eq!(*performed, vec![(1, 0), (2, 0), (1, 1), (2, 1), (1, 2), (2, 2)], 
+                   "Should have performed all ops across all iterations");
+        
+        // Should have 5 successful results (op1 and op2 from iteration 0, op1 from iteration 1, op1 and op2 from iteration 2)
+        assert_eq!(results, vec![1, 2, 1, 1, 2], "Should have results from successful operations only");
+        
+        // Verify rollback: only op1 from iteration 1 should be rolled back (when op2 failed)
         let rolled_back = rolled_back_iterations.lock().unwrap();
         assert_eq!(*rolled_back, vec![(1, 1)], "Should only rollback op1 from failed iteration 1");
     }
