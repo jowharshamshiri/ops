@@ -12,8 +12,8 @@ impl Op<()> for FetchUserOp {
         let user_id = dry.get_required::<i32>("user_id")?;
         
         // Simulate fetching user data
-        dry.insert("username", format!("user_{}", user_id));
-        dry.insert("email", format!("user_{}@example.com", user_id));
+        dry.insert("username", format!("user_{}"));
+        dry.insert("email", format!("user_{}@example.com"));
         dry.insert("age", 25);
         
         Ok(())
@@ -106,7 +106,7 @@ impl Op<String> for CreateReportOp {
             }).to_string(),
             "text" => format!(
                 "User Report\n===========\nID: {}\nUsername: {}\nValid: {}\nChecked: {}",
-                user_id, username, is_valid, timestamp
+                username, is_valid, timestamp
             ),
             _ => return Err(OpError::ExecutionFailed("Unknown report format".to_string()))
         };
@@ -201,7 +201,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     // Create a batch of ops where later ops consume outputs from earlier ones
     let ops: Vec<Arc<dyn Op<()>>> = vec![
-        Arc::new(FetchUserOp),         // Requires: user_id, Produces: username, email, age
+        Arc::new(FetchUserOp),         // Requires: Produces: username, email, age
         Arc::new(ValidateUserOp),      // Requires: username, email (from FetchUserOp), Produces: is_valid, validation_timestamp
         Arc::new(SendNotificationOp),  // Requires: email (from FetchUserOp), is_valid (from ValidateUserOp)
     ];
@@ -217,7 +217,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("\nInput Schema (only unsatisfied requirements):");
         println!("{}", serde_json::to_string_pretty(input_schema)?);
         
-        // The batch should only require: user_id, report_format
+        // The batch should only require: report_format
         // because username, email, is_valid, and validation_timestamp are produced internally
     }
     
