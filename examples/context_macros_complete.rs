@@ -19,12 +19,12 @@ async fn main() -> OpResult<()> {
     let user_id = 123u32;
     
     dry_put!(dry, username);                    // Store variable using its name as key
-    dry_put!(dry, user_id, 456u32);            // Store value with variable name as key
+    dry_put!(dry, 456u32);            // Store value with variable name as key
     dry_put_key!(dry, "session_id", "sess_789"); // Store with custom key
     
     // Basic dry_get! patterns
     let retrieved_username: Option<String> = dry_get!(dry, username);
-    let retrieved_user_id: Option<u32> = dry_get!(dry, user_id);
+    let retrieved_user_id: Option<u32> = dry_get!(dry);
     let session_id: Option<String> = dry_get_key!(dry, "session_id");
     
     println!("Retrieved username: {:?}", retrieved_username);
