@@ -2,7 +2,7 @@ use crate::prelude::*;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
-/// A hierarchical table of contents entry that can represent various TOC structures
+/// A hierarchical table of contents entry that can represent various Outline structures
 /// 
 /// This flexible model can handle:
 /// - Simple flat TOCs: title + page
@@ -10,7 +10,7 @@ use serde_json::json;
 /// - Part-based TOCs: parts with chapters with sections
 /// - Mixed hierarchies: any combination of the above
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TocEntry {
+pub struct OutlineEntry {
     /// The title/heading text (required)
     pub title: String,
     
@@ -28,10 +28,10 @@ pub struct TocEntry {
     
     /// Child entries for hierarchical structures
     /// Empty for leaf entries
-    pub children: Vec<TocEntry>,
+    pub children: Vec<OutlineEntry>,
 }
 
-impl TocEntry {
+impl OutlineEntry {
     pub fn new(title: String, page: Option<String>, level: u8) -> Self {
         Self {
             title,
@@ -47,27 +47,27 @@ impl TocEntry {
         self
     }
     
-    pub fn with_children(mut self, children: Vec<TocEntry>) -> Self {
+    pub fn with_children(mut self, children: Vec<OutlineEntry>) -> Self {
         self.children = children;
         self
     }
     
     /// Add a child entry
-    pub fn add_child(&mut self, child: TocEntry) {
+    pub fn add_child(&mut self, child: OutlineEntry) {
         self.children.push(child);
     }
     
     /// Get all entries flattened with their hierarchical context
-    pub fn flatten(&self) -> Vec<FlatTocEntry> {
+    pub fn flatten(&self) -> Vec<FlatOutlineEntry> {
         let mut result = Vec::new();
         self.flatten_recursive(&mut result, Vec::new());
         result
     }
     
-    fn flatten_recursive(&self, result: &mut Vec<FlatTocEntry>, mut path: Vec<String>) {
+    fn flatten_recursive(&self, result: &mut Vec<FlatOutlineEntry>, mut path: Vec<String>) {
         path.push(self.title.clone());
         
-        result.push(FlatTocEntry {
+        result.push(FlatOutlineEntry {
             title: self.title.clone(),
             page: self.page.clone(),
             level: self.level,
@@ -81,9 +81,9 @@ impl TocEntry {
     }
 }
 
-/// A flattened representation of a TOC entry with full hierarchical path
+/// A flattened representation of a Outline entry with full hierarchical path
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FlatTocEntry {
+pub struct FlatOutlineEntry {
     pub title: String,
     pub page: Option<String>,
     pub level: u8,
@@ -94,40 +94,40 @@ pub struct FlatTocEntry {
 
 /// Complete table of contents structure
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TableOfContents {
+pub struct ListingOutline {
     /// Document title (optional)
     pub document_title: Option<String>,
     
-    /// Main TOC entries
-    pub entries: Vec<TocEntry>,
+    /// Main Outline entries
+    pub entries: Vec<OutlineEntry>,
     
     /// Extraction confidence (0.0 - 1.0)
     pub confidence: f64,
     
-    /// Additional metadata about the TOC structure
-    pub metadata: TocMetadata,
+    /// Additional metadata about the Outline structure
+    pub metadata: OutlineMetadata,
 }
 
-impl TableOfContents {
+impl ListingOutline {
     pub fn new() -> Self {
         Self {
             document_title: None,
             entries: Vec::new(),
             confidence: 0.0,
-            metadata: TocMetadata::default(),
+            metadata: OutlineMetadata::default(),
         }
     }
     
     /// Get all entries as a flat list
-    pub fn flatten(&self) -> Vec<FlatTocEntry> {
+    pub fn flatten(&self) -> Vec<FlatOutlineEntry> {
         self.entries.iter()
             .flat_map(|entry| entry.flatten())
             .collect()
     }
     
     /// Get entries at a specific level
-    pub fn entries_at_level(&self, level: u8) -> Vec<&TocEntry> {
-        fn collect_at_level<'a>(entries: &'a [TocEntry], target_level: u8, result: &mut Vec<&'a TocEntry>) {
+    pub fn entries_at_level(&self, level: u8) -> Vec<&OutlineEntry> {
+        fn collect_at_level<'a>(entries: &'a [OutlineEntry], target_level: u8, result: &mut Vec<&'a OutlineEntry>) {
             for entry in entries {
                 if entry.level == target_level {
                     result.push(entry);
@@ -141,9 +141,9 @@ impl TableOfContents {
         result
     }
     
-    /// Get the maximum depth of the TOC
+    /// Get the maximum depth of the Outline
     pub fn max_depth(&self) -> u8 {
-        fn max_depth_recursive(entries: &[TocEntry]) -> u8 {
+        fn max_depth_recursive(entries: &[OutlineEntry]) -> u8 {
             entries.iter()
                 .map(|entry| {
                     let child_depth = if entry.children.is_empty() {
@@ -161,7 +161,7 @@ impl TableOfContents {
     }
 }
 
-impl Default for TableOfContents {
+impl Default for ListingOutline {
     fn default() -> Self {
         Self::new()
     }
@@ -169,11 +169,11 @@ impl Default for TableOfContents {
 
 /// Metadata about the table of contents structure
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct TocMetadata {
-    /// Detected TOC style (e.g., "numeric", "roman", "alphabetic", "mixed")
+pub struct OutlineMetadata {
+    /// Detected Outline style (e.g., "numeric", "roman", "alphabetic", "mixed")
     pub numbering_style: Option<String>,
     
-    /// Whether the TOC uses dots or other leaders
+    /// Whether the Outline uses dots or other leaders
     pub has_leaders: bool,
     
     /// Page numbering style (e.g., "arabic", "roman", "mixed")
@@ -190,11 +190,11 @@ pub struct TocMetadata {
 }
 
 /// JSON Schema generation for table of contents
-pub fn generate_toc_schema() -> serde_json::Value {
+pub fn generate_outline_schema() -> serde_json::Value {
     json!({
         "$schema": "http://json-schema.org/draft-07/schema#",
         "title": "Table of Contents",
-        "description": "Hierarchical table of contents structure that can represent various TOC formats",
+        "description": "Hierarchical table of contents structure that can represent various Outline formats",
         "type": "object",
         "properties": {
             "document_title": {
@@ -205,7 +205,7 @@ pub fn generate_toc_schema() -> serde_json::Value {
                 "type": "array",
                 "description": "Main table of contents entries",
                 "items": {
-                    "$ref": "#/definitions/TocEntry"
+                    "$ref": "#/definitions/OutlineEntry"
                 }
             },
             "confidence": {
@@ -215,12 +215,12 @@ pub fn generate_toc_schema() -> serde_json::Value {
                 "description": "Confidence level of the extraction (0.0 - 1.0)"
             },
             "metadata": {
-                "$ref": "#/definitions/TocMetadata"
+                "$ref": "#/definitions/OutlineMetadata"
             }
         },
         "required": ["entries", "confidence"],
         "definitions": {
-            "TocEntry": {
+            "OutlineEntry": {
                 "type": "object",
                 "description": "A single table of contents entry with optional hierarchy",
                 "properties": {
@@ -247,13 +247,13 @@ pub fn generate_toc_schema() -> serde_json::Value {
                         "type": "array",
                         "description": "Child entries for hierarchical structures",
                         "items": {
-                            "$ref": "#/definitions/TocEntry"
+                            "$ref": "#/definitions/OutlineEntry"
                         }
                     }
                 },
                 "required": ["title", "level"]
             },
-            "TocMetadata": {
+            "OutlineMetadata": {
                 "type": "object",
                 "description": "Metadata about the table of contents structure",
                 "properties": {
@@ -264,7 +264,7 @@ pub fn generate_toc_schema() -> serde_json::Value {
                     },
                     "has_leaders": {
                         "type": "boolean",
-                        "description": "Whether the TOC uses dots or other leaders"
+                        "description": "Whether the Outline uses dots or other leaders"
                     },
                     "page_style": {
                         "type": ["string", "null"],
@@ -299,84 +299,84 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_simple_flat_toc() {
-        let mut toc = TableOfContents::new();
-        toc.entries = vec![
-            TocEntry::new("Introduction".to_string(), Some("1".to_string()), 0),
-            TocEntry::new("Chapter 1: Getting Started".to_string(), Some("5".to_string()), 0),
-            TocEntry::new("Chapter 2: Advanced Topics".to_string(), Some("15".to_string()), 0),
-            TocEntry::new("Conclusion".to_string(), Some("25".to_string()), 0),
+    fn test_simple_flat_outline() {
+        let mut outline = ListingOutline::new();
+        outline.entries = vec![
+            OutlineEntry::new("Introduction".to_string(), Some("1".to_string()), 0),
+            OutlineEntry::new("Chapter 1: Getting Started".to_string(), Some("5".to_string()), 0),
+            OutlineEntry::new("Chapter 2: Advanced Topics".to_string(), Some("15".to_string()), 0),
+            OutlineEntry::new("Conclusion".to_string(), Some("25".to_string()), 0),
         ];
         
-        assert_eq!(toc.max_depth(), 0);
-        assert_eq!(toc.entries_at_level(0).len(), 4);
-        assert_eq!(toc.flatten().len(), 4);
+        assert_eq!(outline.max_depth(), 0);
+        assert_eq!(outline.entries_at_level(0).len(), 4);
+        assert_eq!(outline.flatten().len(), 4);
     }
 
     #[test]
-    fn test_hierarchical_toc() {
-        let mut toc = TableOfContents::new();
+    fn test_hierarchical_outline() {
+        let mut outline = ListingOutline::new();
         
-        let mut chapter1 = TocEntry::new("Chapter 1: Basics".to_string(), Some("10".to_string()), 0)
+        let mut chapter1 = OutlineEntry::new("Chapter 1: Basics".to_string(), Some("10".to_string()), 0)
             .with_type("chapter".to_string());
-        chapter1.add_child(TocEntry::new("1.1 Introduction".to_string(), Some("10".to_string()), 1));
-        chapter1.add_child(TocEntry::new("1.2 Fundamentals".to_string(), Some("15".to_string()), 1));
+        chapter1.add_child(OutlineEntry::new("1.1 Introduction".to_string(), Some("10".to_string()), 1));
+        chapter1.add_child(OutlineEntry::new("1.2 Fundamentals".to_string(), Some("15".to_string()), 1));
         
-        let mut chapter2 = TocEntry::new("Chapter 2: Advanced".to_string(), Some("20".to_string()), 0)
+        let mut chapter2 = OutlineEntry::new("Chapter 2: Advanced".to_string(), Some("20".to_string()), 0)
             .with_type("chapter".to_string());
-        chapter2.add_child(TocEntry::new("2.1 Complex Topics".to_string(), Some("20".to_string()), 1));
+        chapter2.add_child(OutlineEntry::new("2.1 Complex Topics".to_string(), Some("20".to_string()), 1));
         
-        toc.entries = vec![chapter1, chapter2];
+        outline.entries = vec![chapter1, chapter2];
         
-        assert_eq!(toc.max_depth(), 1);
-        assert_eq!(toc.entries_at_level(0).len(), 2);
-        assert_eq!(toc.entries_at_level(1).len(), 3);
-        assert_eq!(toc.flatten().len(), 5); // 2 chapters + 3 sections
+        assert_eq!(outline.max_depth(), 1);
+        assert_eq!(outline.entries_at_level(0).len(), 2);
+        assert_eq!(outline.entries_at_level(1).len(), 3);
+        assert_eq!(outline.flatten().len(), 5); // 2 chapters + 3 sections
     }
 
     #[test]
-    fn test_complex_part_based_toc() {
-        let mut toc = TableOfContents::new();
+    fn test_complex_part_based_outline() {
+        let mut outline = ListingOutline::new();
         
         // Part I with chapters
-        let mut part1 = TocEntry::new("Part I: Foundations".to_string(), Some("1".to_string()), 0)
+        let mut part1 = OutlineEntry::new("Part I: Foundations".to_string(), Some("1".to_string()), 0)
             .with_type("part".to_string());
         
-        let mut chapter1 = TocEntry::new("Chapter 1: Introduction".to_string(), Some("3".to_string()), 1)
+        let mut chapter1 = OutlineEntry::new("Chapter 1: Introduction".to_string(), Some("3".to_string()), 1)
             .with_type("chapter".to_string());
-        chapter1.add_child(TocEntry::new("1.1 Overview".to_string(), Some("3".to_string()), 2));
-        chapter1.add_child(TocEntry::new("1.2 Scope".to_string(), Some("5".to_string()), 2));
+        chapter1.add_child(OutlineEntry::new("1.1 Overview".to_string(), Some("3".to_string()), 2));
+        chapter1.add_child(OutlineEntry::new("1.2 Scope".to_string(), Some("5".to_string()), 2));
         
-        let chapter2 = TocEntry::new("Chapter 2: Background".to_string(), Some("8".to_string()), 1)
+        let chapter2 = OutlineEntry::new("Chapter 2: Background".to_string(), Some("8".to_string()), 1)
             .with_type("chapter".to_string());
         
         part1.add_child(chapter1);
         part1.add_child(chapter2);
         
         // Part II
-        let part2 = TocEntry::new("Part II: Applications".to_string(), Some("15".to_string()), 0)
+        let part2 = OutlineEntry::new("Part II: Applications".to_string(), Some("15".to_string()), 0)
             .with_type("part".to_string());
         
-        toc.entries = vec![part1, part2];
+        outline.entries = vec![part1, part2];
         
-        assert_eq!(toc.max_depth(), 2);
-        assert_eq!(toc.entries_at_level(0).len(), 2); // 2 parts
-        assert_eq!(toc.entries_at_level(1).len(), 2); // 2 chapters
-        assert_eq!(toc.entries_at_level(2).len(), 2); // 2 sections
-        assert_eq!(toc.flatten().len(), 6); // 2 parts + 2 chapters + 2 sections
+        assert_eq!(outline.max_depth(), 2);
+        assert_eq!(outline.entries_at_level(0).len(), 2); // 2 parts
+        assert_eq!(outline.entries_at_level(1).len(), 2); // 2 chapters
+        assert_eq!(outline.entries_at_level(2).len(), 2); // 2 sections
+        assert_eq!(outline.flatten().len(), 6); // 2 parts + 2 chapters + 2 sections
     }
 
     #[test]
     fn test_flatten_preserves_hierarchy() {
-        let mut toc = TableOfContents::new();
+        let mut outline = ListingOutline::new();
         
-        let mut part = TocEntry::new("Part I".to_string(), Some("1".to_string()), 0);
-        let mut chapter = TocEntry::new("Chapter 1".to_string(), Some("3".to_string()), 1);
-        chapter.add_child(TocEntry::new("Section 1.1".to_string(), Some("3".to_string()), 2));
+        let mut part = OutlineEntry::new("Part I".to_string(), Some("1".to_string()), 0);
+        let mut chapter = OutlineEntry::new("Chapter 1".to_string(), Some("3".to_string()), 1);
+        chapter.add_child(OutlineEntry::new("Section 1.1".to_string(), Some("3".to_string()), 2));
         part.add_child(chapter);
-        toc.entries = vec![part];
+        outline.entries = vec![part];
         
-        let flat = toc.flatten();
+        let flat = outline.flatten();
         assert_eq!(flat.len(), 3);
         
         // Check paths
@@ -387,10 +387,10 @@ mod tests {
 
     #[test]
     fn test_schema_generation() {
-        let schema = generate_toc_schema();
+        let schema = generate_outline_schema();
         assert!(schema.is_object());
         assert!(schema["properties"]["entries"].is_object());
-        assert!(schema["definitions"]["TocEntry"].is_object());
-        assert!(schema["definitions"]["TocMetadata"].is_object());
+        assert!(schema["definitions"]["OutlineEntry"].is_object());
+        assert!(schema["definitions"]["OutlineMetadata"].is_object());
     }
 }
