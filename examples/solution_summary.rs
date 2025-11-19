@@ -69,7 +69,7 @@ repeat_until! {
 
 // The original batch that was failing - now works!
 batch! {
-    ListingDetailsExtractionOpBatch<()> -> unit = [
+    SkimPassOpBatch<()> -> unit = [
         MockOp::new("StartTransactionOp"),
         ContentSelectionOp::new(),           // ✅ Now implements Op<()>
         ContentSelectionLoopOp::new(),       // ✅ Also implements Op<()>
@@ -122,7 +122,7 @@ async fn main() -> OpResult<()> {
     op3.perform(&mut dry, &mut wet).await?;
     
     println!("\n4. The Original Failing Batch - Now Working!");
-    let extraction_batch = ListingDetailsExtractionOpBatch::new();
+    let extraction_batch = SkimPassOpBatch::new();
     extraction_batch.perform(&mut dry, &mut wet).await?;
     
     println!("\n✅ All ops are now fully composable and interchangeable!");

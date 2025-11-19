@@ -24,7 +24,7 @@ pub use wrappers::timeout::TimeBoundWrapper;
 pub use wrappers::validating::ValidatingWrapper;
 pub use ops::{perform, get_caller_op_name, wrap_nested_op_exception};
 pub use macros::AggregationStrategy;
-pub use structured_queries::{TableOfContents, TocEntry, TocMetadata, FlatTocEntry, generate_toc_schema};
+pub use structured_queries::{ListingOutline, OutlineEntry, OutlineMetadata, FlatOutlineEntry, generate_outline_schema};
 
 pub type OpResult<T> = std::result::Result<T, OpError>;
 

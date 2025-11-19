@@ -1,92 +1,92 @@
 use ops::prelude::*;
-use ops::{batch, TableOfContents, TocEntry, TocMetadata, generate_toc_schema};
+use ops::{batch, ListingOutline, OutlineEntry, OutlineMetadata, generate_outline_schema};
 use serde_json::json;
 
 // Mock structured query op for table of contents extraction
 #[derive(Debug)]
-struct TableOfContentsExtractionOp {
+struct ListingOutlineExtractionOp {
     mock_data: bool,
 }
 
-impl TableOfContentsExtractionOp {
+impl ListingOutlineExtractionOp {
     fn new() -> Self {
         Self { mock_data: true }
     }
 }
 
 #[async_trait]
-impl Op<TableOfContents> for TableOfContentsExtractionOp {
-    async fn perform(&self, dry: &mut DryContext, _wet: &mut WetContext) -> OpResult<TableOfContents> {
+impl Op<ListingOutline> for ListingOutlineExtractionOp {
+    async fn perform(&self, dry: &mut DryContext, _wet: &mut WetContext) -> OpResult<ListingOutline> {
         let content: String = dry.get("selected_content").unwrap_or_else(|| {
             "TABLE OF CONTENTS\n\nPart I: Foundations\nChapter 1: Introduction.............................3\n  1.1 Overview.....................................3\n  1.2 Scope........................................5\nChapter 2: Background..............................8\n\nPart II: Applications\nChapter 3: Methods................................15\n  3.1 Basic Methods...............................15\n  3.2 Advanced Techniques.........................18\nChapter 4: Results................................22\n\nAppendix A: Reference Data........................30\nIndex.............................................35".to_string()
         });
         
-        println!("Extracting TOC from content (length: {} chars)", content.len());
+        println!("Deep Dive into content (length: {} chars)", content.len());
         
-        // Create a realistic hierarchical TOC structure
-        let mut toc = TableOfContents::new();
-        toc.document_title = Some("Advanced Research Methods".to_string());
+        // Create a realistic hierarchical Outline structure
+        let mut outline = ListingOutline::new();
+        outline.document_title = Some("Advanced Research Methods".to_string());
         
         // Part I with chapters and sections
-        let mut part1 = TocEntry::new("Part I: Foundations".to_string(), Some("1".to_string()), 0)
+        let mut part1 = OutlineEntry::new("Part I: Foundations".to_string(), Some("1".to_string()), 0)
             .with_type("part".to_string());
         
-        let mut chapter1 = TocEntry::new("Chapter 1: Introduction".to_string(), Some("3".to_string()), 1)
+        let mut chapter1 = OutlineEntry::new("Chapter 1: Introduction".to_string(), Some("3".to_string()), 1)
             .with_type("chapter".to_string());
-        chapter1.add_child(TocEntry::new("1.1 Overview".to_string(), Some("3".to_string()), 2)
+        chapter1.add_child(OutlineEntry::new("1.1 Overview".to_string(), Some("3".to_string()), 2)
             .with_type("section".to_string()));
-        chapter1.add_child(TocEntry::new("1.2 Scope".to_string(), Some("5".to_string()), 2)
+        chapter1.add_child(OutlineEntry::new("1.2 Scope".to_string(), Some("5".to_string()), 2)
             .with_type("section".to_string()));
         
-        let chapter2 = TocEntry::new("Chapter 2: Background".to_string(), Some("8".to_string()), 1)
+        let chapter2 = OutlineEntry::new("Chapter 2: Background".to_string(), Some("8".to_string()), 1)
             .with_type("chapter".to_string());
         
         part1.add_child(chapter1);
         part1.add_child(chapter2);
         
         // Part II with chapters and sections
-        let mut part2 = TocEntry::new("Part II: Applications".to_string(), Some("15".to_string()), 0)
+        let mut part2 = OutlineEntry::new("Part II: Applications".to_string(), Some("15".to_string()), 0)
             .with_type("part".to_string());
         
-        let mut chapter3 = TocEntry::new("Chapter 3: Methods".to_string(), Some("15".to_string()), 1)
+        let mut chapter3 = OutlineEntry::new("Chapter 3: Methods".to_string(), Some("15".to_string()), 1)
             .with_type("chapter".to_string());
-        chapter3.add_child(TocEntry::new("3.1 Basic Methods".to_string(), Some("15".to_string()), 2)
+        chapter3.add_child(OutlineEntry::new("3.1 Basic Methods".to_string(), Some("15".to_string()), 2)
             .with_type("section".to_string()));
-        chapter3.add_child(TocEntry::new("3.2 Advanced Techniques".to_string(), Some("18".to_string()), 2)
+        chapter3.add_child(OutlineEntry::new("3.2 Advanced Techniques".to_string(), Some("18".to_string()), 2)
             .with_type("section".to_string()));
         
-        let chapter4 = TocEntry::new("Chapter 4: Results".to_string(), Some("22".to_string()), 1)
+        let chapter4 = OutlineEntry::new("Chapter 4: Results".to_string(), Some("22".to_string()), 1)
             .with_type("chapter".to_string());
         
         part2.add_child(chapter3);
         part2.add_child(chapter4);
         
         // Appendices
-        let appendix = TocEntry::new("Appendix A: Reference Data".to_string(), Some("30".to_string()), 0)
+        let appendix = OutlineEntry::new("Appendix A: Reference Data".to_string(), Some("30".to_string()), 0)
             .with_type("appendix".to_string());
         
-        let index = TocEntry::new("Index".to_string(), Some("35".to_string()), 0)
+        let index = OutlineEntry::new("Index".to_string(), Some("35".to_string()), 0)
             .with_type("index".to_string());
         
-        toc.entries = vec![part1, part2, appendix, index];
+        outline.entries = vec![part1, part2, appendix, index];
         
         // Set metadata
-        toc.metadata = TocMetadata {
+        outline.metadata = OutlineMetadata {
             numbering_style: Some("mixed".to_string()),
             has_leaders: true,
             page_style: Some("arabic".to_string()),
-            total_entries: toc.flatten().len(),
-            levels: toc.max_depth() + 1,
+            total_entries: outline.flatten().len(),
+            levels: outline.max_depth() + 1,
             structure_type: Some("parts_chapters".to_string()),
         };
         
-        toc.confidence = 0.95;
+        outline.confidence = 0.95;
         
-        Ok(toc)
+        Ok(outline)
     }
     
     fn metadata(&self) -> OpMetadata {
-        OpMetadata::builder("TableOfContentsExtractionOp")
+        OpMetadata::builder("ListingOutlineExtractionOp")
             .description("Extracts hierarchical table of contents from document content")
             .input_schema(json!({
                 "type": "object",
@@ -98,19 +98,19 @@ impl Op<TableOfContents> for TableOfContentsExtractionOp {
                 },
                 "required": ["selected_content"]
             }))
-            .output_schema(generate_toc_schema())
+            .output_schema(generate_outline_schema())
             .build()
     }
 }
 
 // Mock content loading op
 #[derive(Debug)]
-struct LoadTocContentOp;
+struct LoadOutlineContentOp;
 
 #[async_trait]
-impl Op<()> for LoadTocContentOp {
+impl Op<()> for LoadOutlineContentOp {
     async fn perform(&self, dry: &mut DryContext, _wet: &mut WetContext) -> OpResult<()> {
-        // Mock loading TOC content
+        // Mock loading Outline content
         let mock_content = r#"
 TABLE OF CONTENTS
 
@@ -154,12 +154,12 @@ Index.............................................103
         "#;
         
         dry.insert("selected_content", mock_content.to_string());
-        println!("Loaded TOC content for extraction");
+        println!("Loaded Outline content for extraction");
         Ok(())
     }
     
     fn metadata(&self) -> OpMetadata {
-        OpMetadata::builder("LoadTocContentOp")
+        OpMetadata::builder("LoadOutlineContentOp")
             .description("Loads table of contents content for extraction")
             .build()
     }
@@ -167,47 +167,47 @@ Index.............................................103
 
 // Step-by-step pipeline using unit aggregation for mixed op types
 batch! {
-    TocLoadingStep<()> -> unit = [
-        LoadTocContentOp
+    OutlineLoadingStep<()> -> unit = [
+        LoadOutlineContentOp
     ]
 }
 
 batch! {
-    TocExtractionStep<TableOfContents> -> last = [
-        TableOfContentsExtractionOp::new()
+    OutlineExtractionStep<ListingOutline> -> last = [
+        ListingOutlineExtractionOp::new()
     ]
 }
 
-// Analysis ops for working with extracted TOC
+// Analysis ops for working with extracted Outline
 #[derive(Debug)]
-struct TocAnalysisOp;
+struct OutlineAnalysisOp;
 
 #[async_trait]
-impl Op<()> for TocAnalysisOp {
+impl Op<()> for OutlineAnalysisOp {
     async fn perform(&self, dry: &mut DryContext, _wet: &mut WetContext) -> OpResult<()> {
-        let toc: TableOfContents = dry.get("extracted_toc")
-            .ok_or_else(|| OpError::ExecutionFailed("No TOC found in context".to_string()))?;
+        let outline: ListingOutline = dry.get("extracted_outline")
+            .ok_or_else(|| OpError::ExecutionFailed("No Outline found in context".to_string()))?;
         
         println!("\n📚 TABLE OF CONTENTS ANALYSIS");
         println!("===============================");
         
-        if let Some(title) = &toc.document_title {
+        if let Some(title) = &outline.document_title {
             println!("Document: {}", title);
         }
         
-        println!("Structure: {:?}", toc.metadata.structure_type);
-        println!("Total entries: {}", toc.metadata.total_entries);
-        println!("Hierarchy levels: {}", toc.metadata.levels);
-        println!("Has page leaders: {}", toc.metadata.has_leaders);
-        println!("Confidence: {:.1}%", toc.confidence * 100.0);
+        println!("Structure: {:?}", outline.metadata.structure_type);
+        println!("Total entries: {}", outline.metadata.total_entries);
+        println!("Hierarchy levels: {}", outline.metadata.levels);
+        println!("Has page leaders: {}", outline.metadata.has_leaders);
+        println!("Confidence: {:.1}%", outline.confidence * 100.0);
         
         println!("\n📑 HIERARCHICAL STRUCTURE:");
-        for entry in &toc.entries {
+        for entry in &outline.entries {
             print_entry(entry, 0);
         }
         
         println!("\n📋 FLAT VIEW:");
-        let flat = toc.flatten();
+        let flat = outline.flatten();
         for (i, entry) in flat.iter().enumerate() {
             let indent = "  ".repeat(entry.level as usize);
             let page_info = entry.page.as_ref()
@@ -224,8 +224,8 @@ impl Op<()> for TocAnalysisOp {
         }
         
         println!("\n🔍 LEVEL ANALYSIS:");
-        for level in 0..=toc.max_depth() {
-            let entries_at_level = toc.entries_at_level(level);
+        for level in 0..=outline.max_depth() {
+            let entries_at_level = outline.entries_at_level(level);
             println!("Level {}: {} entries", level, entries_at_level.len());
             for entry in entries_at_level.iter().take(3) {
                 println!("  - {}", entry.title);
@@ -239,13 +239,13 @@ impl Op<()> for TocAnalysisOp {
     }
     
     fn metadata(&self) -> OpMetadata {
-        OpMetadata::builder("TocAnalysisOp")
+        OpMetadata::builder("OutlineAnalysisOp")
             .description("Analyzes extracted table of contents structure")
             .build()
     }
 }
 
-fn print_entry(entry: &TocEntry, depth: usize) {
+fn print_entry(entry: &OutlineEntry, depth: usize) {
     let indent = "  ".repeat(depth);
     let page_info = entry.page.as_ref()
         .map(|p| format!(" → page {}", p))
@@ -263,29 +263,29 @@ fn print_entry(entry: &TocEntry, depth: usize) {
 
 // Storage op to bridge between different return types
 #[derive(Debug)]
-struct StoreTocOp;
+struct StoreOutlineOp;
 
 #[async_trait]
-impl Op<()> for StoreTocOp {
+impl Op<()> for StoreOutlineOp {
     async fn perform(&self, dry: &mut DryContext, _wet: &mut WetContext) -> OpResult<()> {
-        // Get TOC from the extraction step and store it for analysis
-        let toc: TableOfContents = dry.get("extracted_toc_temp")
-            .ok_or_else(|| OpError::ExecutionFailed("No temporary TOC found".to_string()))?;
-        dry.insert("extracted_toc", toc);
+        // Get Outline from the extraction step and store it for analysis
+        let outline: ListingOutline = dry.get("extracted_outline_temp")
+            .ok_or_else(|| OpError::ExecutionFailed("No temporary Outline found".to_string()))?;
+        dry.insert("extracted_outline", outline);
         Ok(())
     }
     
     fn metadata(&self) -> OpMetadata {
-        OpMetadata::builder("StoreTocOp")
-            .description("Stores extracted TOC for subsequent analysis")
+        OpMetadata::builder("StoreOutlineOp")
+            .description("Stores extracted Outline for subsequent analysis")
             .build()
     }
 }
 
 // Analysis-only pipeline
 batch! {
-    TocAnalysisPipeline<()> -> unit = [
-        TocAnalysisOp
+    OutlineAnalysisPipeline<()> -> unit = [
+        OutlineAnalysisOp
     ]
 }
 
@@ -298,27 +298,27 @@ async fn main() -> OpResult<()> {
     println!("=====================================\n");
     
     // Step 1: Load content
-    let loading_step = TocLoadingStep::new();
+    let loading_step = OutlineLoadingStep::new();
     loading_step.perform(&mut dry, &mut wet).await?;
     
-    // Step 2: Extract TOC
-    let extraction_step = TocExtractionStep::new();
-    let extracted_toc = extraction_step.perform(&mut dry, &mut wet).await?;
+    // Step 2: Extract Outline
+    let extraction_step = OutlineExtractionStep::new();
+    let extracted_outline = extraction_step.perform(&mut dry, &mut wet).await?;
     
     // Store for analysis
-    dry.insert("extracted_toc", extracted_toc.clone());
+    dry.insert("extracted_outline", extracted_outline.clone());
     
-    // Step 3: Analyze TOC
-    let analysis_pipeline = TocAnalysisPipeline::new();
+    // Step 3: Analyze Outline
+    let analysis_pipeline = OutlineAnalysisPipeline::new();
     analysis_pipeline.perform(&mut dry, &mut wet).await?;
     
     println!("\n✅ SCHEMA VALIDATION");
     println!("====================");
-    let schema = generate_toc_schema();
+    let schema = generate_outline_schema();
     println!("Generated JSON Schema with {} properties", 
         schema["properties"].as_object().unwrap().len());
     println!("Schema supports {} entry types", 
-        schema["definitions"]["TocEntry"]["properties"]["entry_type"]["enum"]
+        schema["definitions"]["OutlineEntry"]["properties"]["entry_type"]["enum"]
             .as_array().unwrap().len());
     
     println!("\n🎯 USE CASES SUPPORTED:");

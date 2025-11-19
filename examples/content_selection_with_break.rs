@@ -163,7 +163,7 @@ impl Op<()> for StartTransactionOp {
 }
 
 repeat_until! {
-    ListingDetailsExtractionOpBatch<()> -> unit = {
+    SkimPassOpBatch<()> -> unit = {
         counter: "extraction_step",
         condition: "extraction_active",
         max_iterations: 5,
@@ -199,7 +199,7 @@ async fn main() -> OpResult<()> {
     dry.insert("should_continue", true);
     dry.insert("extraction_active", true);
     
-    let extraction_pipeline = ListingDetailsExtractionOpBatch::new();
+    let extraction_pipeline = SkimPassOpBatch::new();
     match extraction_pipeline.perform(&mut dry, &mut wet).await {
         Ok(_) => {
             let result = dry.get::<String>("selection_result");

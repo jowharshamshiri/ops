@@ -139,7 +139,7 @@ repeat_until! {
 
 // The batch operation that had the original error - now works!
 batch! {
-    ListingDetailsExtractionOpBatch<()> -> unit = [
+    SkimPassOpBatch<()> -> unit = [
         StartTransactionOp,
         ContentSelectionOp::new(),           // ✅ Now implements Op<()>
         ContentSelectionLoopOp::new(),       // ✅ Also implements Op<()>  
@@ -216,7 +216,7 @@ async fn main() -> OpResult<()> {
     println!("While loop content selection result: {:?}", result);
     
     println!("\n=== Full Extraction Pipeline ===");
-    let extraction_pipeline = ListingDetailsExtractionOpBatch::new();
+    let extraction_pipeline = SkimPassOpBatch::new();
     let result = extraction_pipeline.perform(&mut dry, &mut wet).await?;
     println!("Full extraction pipeline result: {:?}", result);
     
