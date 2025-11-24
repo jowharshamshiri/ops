@@ -8,14 +8,14 @@ use std::collections::HashMap;
 // Simulated search index
 type SearchIndex = Arc<Mutex<HashMap<String, String>>>;
 
-struct UpdateSearchIndexOp {
+struct UpdateSearchIndexCloseReadOp {
     document_id: String,
     content: String,
     index: SearchIndex,
 }
 
 #[async_trait]
-impl Op<()> for UpdateSearchIndexOp {
+impl Op<()> for UpdateSearchIndexCloseReadOp {
     async fn perform(&self, _dry: &mut DryContext, _wet: &mut WetContext) -> OpResult<()> {
         // Simulate updating search index
         self.index.lock().unwrap().insert(self.document_id.clone(), self.content.clone());
@@ -31,7 +31,7 @@ impl Op<()> for UpdateSearchIndexOp {
     }
     
     fn metadata(&self) -> OpMetadata {
-        OpMetadata::builder("UpdateSearchIndexOp")
+        OpMetadata::builder("UpdateSearchIndexCloseReadOp")
             .description("Updates search index with document content")
             .build()
     }
@@ -71,12 +71,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     // Create operations that will succeed initially but fail later
     let ops = vec![
-        Arc::new(UpdateSearchIndexOp {
+        Arc::new(UpdateSearchIndexCloseReadOp {
             document_id: "doc1".to_string(),
             content: "First document content".to_string(),
             index: search_index.clone(),
         }) as Arc<dyn Op<()>>,
-        Arc::new(UpdateSearchIndexOp {
+        Arc::new(UpdateSearchIndexCloseReadOp {
             document_id: "doc2".to_string(),
             content: "Second document content".to_string(),
             index: search_index.clone(),
@@ -107,7 +107,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     println!("\n=== Summary ===");
     println!("This example demonstrates how:");
-    println!("1. UpdateSearchIndexOp implements custom rollback logic");
+    println!("1. UpdateSearchIndexCloseReadOp implements custom rollback logic");
     println!("2. When DatabaseOp fails, the batch automatically rolls back");
     println!("3. Search index entries are cleaned up via custom rollback");
     println!("4. Transaction-based ops (DatabaseOp) can rely on transaction rollback");
