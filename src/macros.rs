@@ -1,3 +1,6 @@
+use crate::{DryContext, WetContext, Op, OpResult};
+use async_trait::async_trait;
+
 /// Store a variable in dry context using its name as the key
 /// dry_put!(dry_context, variable_name)
 #[macro_export]
@@ -1033,4 +1036,70 @@ macro_rules! check_abort {
             return Err($crate::OpError::Aborted(reason));
         }
     };
+}
+
+
+
+/// Macro to create BridgeOp wrappers for any operation type
+///
+/// This macro generates all the boilerplate code needed to wrap any Op type in an Op<()>
+///
+/// ```
+#[macro_export]
+macro_rules! op_bridge {
+    ($wrapper_name:ident, $op_type:ty, $name:expr) => {
+        pub struct $wrapper_name {
+            inner: $op_type,
+        }
+
+        impl $wrapper_name {
+            pub fn new() -> Self {
+                Self {
+                    inner: <$op_type>::new(),
+                }
+            }
+        }
+
+        impl Default for $wrapper_name {
+            fn default() -> Self {
+                Self::new()
+            }
+        }
+
+        #[async_trait::async_trait]
+        impl $crate::Op<()> for $wrapper_name {
+            fn metadata(&self) -> $crate::OpMetadata {
+                self.inner.metadata()
+            }
+
+            async fn perform(&self, dry: &mut $crate::DryContext, wet: &mut $crate::WetContext) -> $crate::OpResult<()> {
+                self.inner.perform(dry, wet).await.map(|_| ())
+            }
+        }
+
+        #[async_trait::async_trait]
+        impl $crate::BridgeOp for $wrapper_name {
+            async fn execute(
+                &self,
+                dry: &mut $crate::DryContext,
+                wet: &mut $crate::WetContext,
+            ) -> $crate::OpResult<()> {
+                self.inner.perform(dry, wet).await.map(|_| ())
+            }
+
+            fn name(&self) -> &'static str {
+                $name
+            }
+        }
+    };
+}
+
+/// A trait that allows any operation to be executed through the registry
+#[async_trait]
+pub trait BridgeOp: Op<()> + Send + Sync {
+    /// Execute the operation with the given contexts
+    async fn execute(&self, dry: &mut DryContext, wet: &mut WetContext) -> OpResult<()>;
+
+    /// Get the name of this operation type
+    fn name(&self) -> &'static str;
 }
