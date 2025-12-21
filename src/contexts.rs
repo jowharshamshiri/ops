@@ -90,15 +90,15 @@ impl DryContext {
 
     /// Get a value or compute it using a closure that has access to the context
     /// The closure receives mutable access to the context and the key, and must insert the value itself
-    pub fn ensure<T, F>(&mut self, key: &str, factory: F) -> Result<T, OpError>
+    pub async fn ensure<T, F>(&mut self, key: &str, wet: &mut WetContext, factory: F) -> Result<T, OpError>
     where
         T: Serialize + for<'de> Deserialize<'de>,
-        F: FnOnce(&mut Self, &str) -> T,
+        F: for<'a> FnOnce(&'a mut Self, &'a mut WetContext, &'a str) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<T, OpError>> + Send + 'a>>,
     {
         if let Some(value) = self.get::<T>(key) {
             Ok(value)
         } else {
-            let new_value = factory(self, key);
+            let new_value = factory(self, wet, key).await?;
 			self.insert(key, &new_value);
             
             Ok(new_value)
@@ -196,6 +196,21 @@ impl WetContext {
 
     pub fn keys(&self) -> impl Iterator<Item = &String> {
         self.references.keys()
+    }
+
+    /// Get a reference or compute it using an async closure that has access to both contexts
+    pub async fn ensure<T, F>(&mut self, key: &str, dry: &mut DryContext, factory: F) -> Result<Arc<T>, OpError>
+    where
+        T: Any + Send + Sync,
+        F: for<'a> FnOnce(&'a mut DryContext, &'a mut Self, &'a str) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Arc<T>, OpError>> + Send + 'a>>,
+    {
+        if let Some(value) = self.get_ref::<T>(key) {
+            Ok(value)
+        } else {
+            let new_value = factory(dry, self, key).await?;
+            self.insert_arc(key, new_value.clone());
+            Ok(new_value)
+        }
     }
 
     pub fn merge(&mut self, other: WetContext) {
