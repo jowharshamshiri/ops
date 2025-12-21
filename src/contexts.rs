@@ -88,6 +88,23 @@ impl DryContext {
         &self.values
     }
 
+    /// Get a value or compute it using a closure that has access to the context
+    /// The closure receives mutable access to the context and the key, and must insert the value itself
+    pub fn ensure<T, F>(&mut self, key: &str, factory: F) -> Result<T, OpError>
+    where
+        T: Serialize + for<'de> Deserialize<'de>,
+        F: FnOnce(&mut Self, &str) -> T,
+    {
+        if let Some(value) = self.get::<T>(key) {
+            Ok(value)
+        } else {
+            let new_value = factory(self, key);
+			self.insert(key, &new_value);
+            
+            Ok(new_value)
+        }
+    }
+
     pub fn merge(&mut self, other: DryContext) {
         self.values.extend(other.values);
         // Only merge control flags if they are set in other and not already set in self
@@ -112,8 +129,6 @@ impl DryContext {
     pub fn abort_reason(&self) -> Option<&String> {
         self.control_flags.abort_reason.as_ref()
     }
-    
-    
     
     /// Clear all control flags
     pub fn clear_control_flags(&mut self) {
@@ -367,5 +382,94 @@ mod tests {
         ctx3.merge(ctx4);
         // Should keep the original abort reason since ctx3 was already aborted
         assert_eq!(ctx3.abort_reason(), Some(&"Original abort".to_string()));
+    }
+
+    #[test]
+    fn test_get_or_insert_with() {
+        let mut ctx = DryContext::new();
+        
+        // Test inserting a new value when key doesn't exist
+        let value = ctx.get_or_insert_with("count", || 42).unwrap();
+        assert_eq!(value, 42);
+        assert_eq!(ctx.get::<i32>("count").unwrap(), 42);
+        
+        // Test getting existing value without calling factory
+        let mut factory_called = false;
+        let value = ctx.get_or_insert_with("count", || {
+            factory_called = true;
+            100
+        }).unwrap();
+        assert_eq!(value, 42); // Should return existing value
+        assert!(!factory_called); // Factory should not be called
+        
+        // Test with different types
+        let name = ctx.get_or_insert_with("name", || "default_name".to_string()).unwrap();
+        assert_eq!(name, "default_name");
+        assert_eq!(ctx.get::<String>("name").unwrap(), "default_name");
+        
+        // Test with complex types
+        #[derive(Debug, PartialEq, Serialize, Deserialize)]
+        struct Config {
+            host: String,
+            port: u16,
+        }
+        
+        let config = ctx.get_or_insert_with("config", || Config {
+            host: "localhost".to_string(),
+            port: 8080,
+        }).unwrap();
+        
+        assert_eq!(config.host, "localhost");
+        assert_eq!(config.port, 8080);
+        
+        // Verify it's stored in context
+        let stored_config = ctx.get::<Config>("config").unwrap();
+        assert_eq!(stored_config, config);
+    }
+
+    #[test]
+    fn test_get_or_compute_with() {
+        let mut ctx = DryContext::new();
+        
+        // Seed some initial data
+        ctx.insert("base_port", 8000);
+        ctx.insert("app_name", "test_app".to_string());
+        
+        // Test computing a value that depends on existing context data
+        let computed_url = ctx.get_or_compute_with("service_url", |ctx, key| {
+            let base_port: i32 = ctx.get("base_port").unwrap_or(3000);
+            let app_name: String = ctx.get("app_name").unwrap_or_else(|| "default".to_string());
+            let url = format!("http://{}:{}", app_name, base_port + 80);
+            
+            // The closure can insert additional related data
+            ctx.insert("computed_port", base_port + 80);
+            ctx.insert(format!("{}_timestamp", key), "2023-01-01T00:00:00Z");
+            
+            url
+        }).unwrap();
+        
+        assert_eq!(computed_url, "http://test_app:8080");
+        assert_eq!(ctx.get::<String>("service_url").unwrap(), "http://test_app:8080");
+        assert_eq!(ctx.get::<i32>("computed_port").unwrap(), 8080);
+        assert_eq!(ctx.get::<String>("service_url_timestamp").unwrap(), "2023-01-01T00:00:00Z");
+        
+        // Test getting existing value without calling computer
+        let mut computer_called = false;
+        let existing_url = ctx.get_or_compute_with("service_url", |_ctx, _key| {
+            computer_called = true;
+            "should_not_be_called".to_string()
+        }).unwrap();
+        
+        assert_eq!(existing_url, "http://test_app:8080");
+        assert!(!computer_called);
+        
+        // Test computer that doesn't insert the value (fallback insertion)
+        let fallback_value = ctx.get_or_compute_with("fallback_test", |_ctx, _key| {
+            // Computer doesn't insert the value itself
+            "fallback_computed".to_string()
+        }).unwrap();
+        
+        assert_eq!(fallback_value, "fallback_computed");
+        assert_eq!(ctx.get::<String>("fallback_test").unwrap(), "fallback_computed");
     }
 }
