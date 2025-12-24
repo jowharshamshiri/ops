@@ -1,6 +1,7 @@
 use crate::prelude::*;
 use crate::batch_metadata::BatchMetadataBuilder;
 
+#[derive(Clone)]
 pub struct BatchOp<T> {
     ops: Vec<Arc<dyn Op<T>>>,
     continue_on_error: bool,

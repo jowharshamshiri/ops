@@ -7,7 +7,7 @@ use crate::{DryContext, Op, OpMetadata, OpResult, WetContext};
 use async_trait::async_trait;
 
 /// Predicate that is always true
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct TrivialPredicate {}
 
 impl Default for TrivialPredicate {

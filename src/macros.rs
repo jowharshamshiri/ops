@@ -199,7 +199,7 @@ macro_rules! batch {
     
     // Flexible aggregation strategy
     ($name:ident<$T:ty> -> $strategy:ident = [$($op:expr),+ $(,)?]) => {
-        #[derive(Debug)]
+        #[derive(Debug, Clone)]
         pub struct $name {
             batch: $crate::BatchOp<$T>,
             strategy: $crate::macros::AggregationStrategy,
@@ -392,7 +392,7 @@ macro_rules! repeat {
         continue_on_error: $continue_on_error:expr,
         ops: [$($op:expr),+ $(,)?]
     }) => {
-        #[derive(Debug)]
+        #[derive(Debug, Clone)]
         pub struct $name {
             counter_var: String,
             limit_var: String,
@@ -617,7 +617,7 @@ macro_rules! repeat_until {
         max_iterations: $max:expr,
         ops: [$($op:expr),+ $(,)?]
     }) => {
-        #[derive(Debug)]
+        #[derive(Debug, Clone)]
         pub struct $name {
             counter_var: String,
             condition_var: String,
@@ -1038,24 +1038,74 @@ macro_rules! check_abort {
     };
 }
 
-
-
-/// Macro to create BridgeOp wrappers for any operation type
-///
-/// This macro generates all the boilerplate code needed to wrap any Op type in an Op<()>
-///
-/// ```
+/// Macro to create a void wrapper type that discards the result
 #[macro_export]
-macro_rules! op_bridge {
-    ($wrapper_name:ident, $op_type:ty, $name:expr) => {
+macro_rules! void_op {
+    ($wrapper_name:ident, $op_type:ty) => {
+        #[derive(Clone)]
         pub struct $wrapper_name {
-            inner: $op_type,
+            wrapped: $op_type,
         }
 
         impl $wrapper_name {
             pub fn new() -> Self {
-                Self {
-                    inner: <$op_type>::new(),
+                Self { wrapped: <$op_type>::new() }
+            }
+        }
+
+        #[async_trait::async_trait]
+        impl $crate::Op<()> for $wrapper_name {
+            async fn perform(&self, dry: &mut DryContext, wet: &mut WetContext) -> OpResult<()> {
+                self.wrapped.perform(dry, wet).await.map(|_| ())
+            }
+            
+            fn metadata(&self) -> OpMetadata {
+                self.wrapped.metadata()
+            }
+            
+            async fn rollback(&self, dry: &mut DryContext, wet: &mut WetContext) -> OpResult<()> {
+                self.wrapped.rollback(dry, wet).await
+            }
+        }
+    };
+}
+
+
+/// Macro to create a Trigger for any operation type
+///
+/// This macro generates all the boilerplate code needed to set a trigger for any Op type
+/// and make it compatible with the TriggerRegistry system.
+///
+/// Usage:
+/// ```rust
+/// // Basic usage - creates MyTrigger struct
+/// wire_trigger!(MyTrigger, MyOp, "MyOperation");
+///
+/// // Real examples
+/// wire_trigger!(FolderScanTrigger, crate::ops::FolderScanOp, "FolderScanOp");
+/// wire_trigger!(CustomAnalysisTrigger, MyCustomAnalysisOp, "CustomAnalysis");
+///
+/// // Then register in your registry
+/// registry.register("my_task_type", || {
+///     Box::new(MyTrigger::new())
+/// });
+/// ```
+#[macro_export]
+macro_rules! wire_trigger {
+    ($wrapper_name:ident, $op_type:ty, $name:expr) => {
+        paste::paste! {
+            // Create a void wrapper for the op type with unique name
+            $crate::void_op!([<$wrapper_name VoidOp>], $op_type);
+            
+            pub struct $wrapper_name {
+                action: [<$wrapper_name VoidOp>],
+            }
+
+            impl $wrapper_name {
+                pub fn new() -> Self {
+                    Self {
+                        action: [<$wrapper_name VoidOp>]::new(),
+                    }
                 }
             }
         }
@@ -1067,39 +1117,58 @@ macro_rules! op_bridge {
         }
 
         #[async_trait::async_trait]
-        impl $crate::Op<()> for $wrapper_name {
-            fn metadata(&self) -> $crate::OpMetadata {
-                self.inner.metadata()
-            }
+        impl $crate::Trigger for $wrapper_name {
+			fn actions(&self) -> Vec<Box<dyn $crate::Op<()>>> {
+				vec![Box::new(self.action.clone())]
+			}
 
-            async fn perform(&self, dry: &mut $crate::DryContext, wet: &mut $crate::WetContext) -> $crate::OpResult<()> {
-                self.inner.perform(dry, wet).await.map(|_| ())
-            }
-        }
-
-        #[async_trait::async_trait]
-        impl $crate::BridgeOp for $wrapper_name {
-            async fn execute(
-                &self,
-                dry: &mut $crate::DryContext,
-                wet: &mut $crate::WetContext,
-            ) -> $crate::OpResult<()> {
-                self.inner.perform(dry, wet).await.map(|_| ())
-            }
-
-            fn name(&self) -> &'static str {
-                $name
-            }
+			fn predicate(&self) -> Box<dyn $crate::Op<bool>> {
+				Box::new($crate::TrivialPredicate::default())
+			}
         }
     };
-}
+    
+    ($wrapper_name:ident, $op_type:ty, $name:expr, $predicate:expr) => {
+        paste::paste! {
+            // Create a void wrapper for the op type with unique name
+            $crate::void_op!([<$wrapper_name VoidOp>], $op_type);
+            
+            pub struct $wrapper_name {
+                action: [<$wrapper_name VoidOp>],
+                predicate: Box<dyn $crate::Op<bool>>,
+            }
 
-/// A trait that allows any operation to be executed through the registry
-#[async_trait]
-pub trait BridgeOp: Op<()> + Send + Sync {
-    /// Execute the operation with the given contexts
-    async fn execute(&self, dry: &mut DryContext, wet: &mut WetContext) -> OpResult<()>;
+            impl $wrapper_name {
+                pub fn new() -> Self {
+                    Self {
+                        action: [<$wrapper_name VoidOp>]::new(),
+                        predicate: $predicate,
+                    }
+                }
+                
+                pub fn with_predicate(predicate: Box<dyn $crate::Op<bool>>) -> Self {
+                    Self {
+                        action: [<$wrapper_name VoidOp>]::new(),
+                        predicate,
+                    }
+                }
+            }
+        }
 
-    /// Get the name of this operation type
-    fn name(&self) -> &'static str;
+        impl Default for $wrapper_name {
+            fn default() -> Self {
+                Self::new()
+            }
+        }
+
+		#[async_trait::async_trait]
+		impl $crate::Trigger for $wrapper_name {
+			fn predicate(&self) -> Box<dyn $crate::Op<bool>> {
+				self.predicate.clone()
+			}
+			fn actions(&self) -> Vec<Box<dyn $crate::Op<()>>> {
+				vec![Box::new(self.action.clone())]
+			}
+		}
+    };
 }
