@@ -11,12 +11,12 @@ pub use engine::*;
 
 #[async_trait]
 pub trait Trigger: Send + Sync {
-	fn predicate(&self) -> Box<dyn Op<bool>>;
-    fn actions(&self) -> Vec<Box<dyn Op<()>>>;
+	fn predicate(&self) -> Arc<dyn Op<bool>>;
+    fn actions(&self) -> Vec<Arc<dyn Op<()>>>;
 	async fn perform(&self, dry: &mut DryContext, wet: &mut WetContext) -> OpResult<()> {
 		let should = self.predicate().perform(dry, wet).await?;
 		if should {
-			let batch = BatchOp::new(self.actions().into_iter().map(Arc::from).collect());
+			let batch = BatchOp::new(self.actions());
 			batch.perform(dry, wet).await?;
 		}
 		Ok(())
