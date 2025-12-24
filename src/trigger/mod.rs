@@ -10,7 +10,7 @@ pub mod engine;
 pub use engine::*;
 
 #[async_trait]
-pub trait Trigger: Op<()> {
+pub trait Trigger: Send + Sync {
 	fn predicate(&self) -> Box<dyn Op<bool>>;
     fn actions(&self) -> Vec<Box<dyn Op<()>>>;
 	async fn perform(&self, dry: &mut DryContext, wet: &mut WetContext) -> OpResult<()> {
@@ -31,4 +31,18 @@ pub trait Trigger: Op<()> {
 			output_schema: None,
 		}
 	}
+}
+
+#[async_trait]
+impl<T> Op<()> for T
+where
+    T: Trigger,
+{
+    async fn perform(&self, dry: &mut DryContext, wet: &mut WetContext) -> OpResult<()> {
+        self.perform(dry, wet).await
+    }
+
+    fn metadata(&self) -> OpMetadata {
+        self.metadata()
+    }
 }

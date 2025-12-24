@@ -6,6 +6,7 @@ use crate::{DryContext, Op, OpMetadata, OpResult, WetContext};
 
 type AsyncHandler = Box<dyn Fn(&mut DryContext, &mut WetContext) -> Pin<Box<dyn Future<Output = OpResult<bool>> + Send>> + Send + Sync>;
 
+#[derive(Clone, Debug)]
 pub struct InlinePredicateOp {
 	handler: AsyncHandler,
 }

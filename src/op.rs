@@ -16,7 +16,6 @@ pub trait Op<T>: Send + Sync {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
