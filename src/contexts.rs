@@ -88,6 +88,36 @@ impl DryContext {
         &self.values
     }
 
+    /// Get a value or insert it using a factory closure if it doesn't exist
+    pub fn get_or_insert_with<T, F>(&mut self, key: &str, factory: F) -> Result<T, OpError>
+    where
+        T: Serialize + for<'de> Deserialize<'de>,
+        F: FnOnce() -> T,
+    {
+        if let Some(value) = self.get::<T>(key) {
+            Ok(value)
+        } else {
+            let new_value = factory();
+            self.insert(key, &new_value);
+            Ok(new_value)
+        }
+    }
+
+    /// Get a value or compute it using a closure that has access to the context
+    pub fn get_or_compute_with<T, F>(&mut self, key: &str, computer: F) -> Result<T, OpError>
+    where
+        T: Serialize + for<'de> Deserialize<'de>,
+        F: FnOnce(&mut Self, &str) -> T,
+    {
+        if let Some(value) = self.get::<T>(key) {
+            Ok(value)
+        } else {
+            let new_value = computer(self, key);
+            self.insert(key, &new_value);
+            Ok(new_value)
+        }
+    }
+
     /// Get a value or compute it using a closure that has access to the context
     /// The closure receives mutable access to the context and the key, and must insert the value itself
     pub async fn ensure<T, F>(&mut self, key: &str, wet: &mut WetContext, factory: F) -> Result<T, OpError>

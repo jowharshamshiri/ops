@@ -62,9 +62,9 @@ macro_rules! dry_require_key {
 /// dry_result!(dry_context, "OpName", result_value);
 #[macro_export]
 macro_rules! dry_result {
-    ($ctx:expr, $op_name:expr, $result:expr) => {
+    ($ctx:expr, $trigger_name:expr, $result:expr) => {
         {
-            $ctx.insert($op_name, $result.clone());
+            $ctx.insert($trigger_name, $result.clone());
             $ctx.insert("result", $result);
         }
     };

@@ -4,7 +4,7 @@
 use ops::{
     DryContext, WetContext, Op, OpMetadata, OpError,
     BatchOp, LoggingWrapper, TimeBoundWrapper,
-    perform, get_caller_op_name, wrap_nested_op_exception,
+    perform, get_caller_trigger_name, wrap_nested_op_exception,
 };
 use serde::{Serialize, Deserialize};
 use std::time::Duration;
@@ -61,9 +61,9 @@ async fn test_error_handling_and_wrapper_chains() {
 
 #[tokio::test]
 async fn test_stack_trace_analysis() {
-    let op_name = get_caller_op_name();
-    assert!(op_name.contains("integration_tests"));
-    assert!(op_name.contains("::"));
+    let trigger_name = get_caller_trigger_name();
+    assert!(trigger_name.contains("integration_tests"));
+    assert!(trigger_name.contains("::"));
 }
 
 #[tokio::test]

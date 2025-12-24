@@ -14,10 +14,10 @@ where
     T: Send + 'static,
 {
     // Get caller information for dynamic op naming
-    let op_name = get_caller_op_name();
+    let trigger_name = get_caller_trigger_name();
     
     // Wrap op with logging (matches Java behavior)
-    let logged_op = LoggingWrapper::new(op, op_name);
+    let logged_op = LoggingWrapper::new(op, trigger_name);
     
     // Execute with logging
     logged_op.perform(dry, wet).await
@@ -26,7 +26,7 @@ where
 /// Stack trace analysis to get caller class name
 /// Equivalent to Java getCallerCallerClassName()
 #[track_caller]
-pub fn get_caller_op_name() -> String {
+pub fn get_caller_trigger_name() -> String {
     let location = Location::caller();
     format!("{}::{}", 
         location.file().split('/').last().unwrap_or("unknown").replace(".rs", ""),
@@ -36,26 +36,29 @@ pub fn get_caller_op_name() -> String {
 
 /// Wrap nested op exception with context
 /// Equivalent to Java wrapNestedOpException(String, Exception)
-pub fn wrap_nested_op_exception(op_name: &str, error: OpError) -> OpError {
+pub fn wrap_nested_op_exception(trigger_name: &str, error: OpError) -> OpError {
     match error {
         OpError::ExecutionFailed(msg) => {
-            OpError::ExecutionFailed(format!("Op '{}' failed: {}", op_name, msg))
+            OpError::ExecutionFailed(format!("Op '{}' failed: {}", trigger_name, msg))
         },
         OpError::Timeout { timeout_ms } => {
-            OpError::ExecutionFailed(format!("Op '{}' timed out after {}ms", op_name, timeout_ms))
+            OpError::ExecutionFailed(format!("Op '{}' timed out after {}ms", trigger_name, timeout_ms))
         },
         OpError::Context(msg) => {
-            OpError::Context(format!("Op '{}' context error: {}", op_name, msg))
+            OpError::Context(format!("Op '{}' context error: {}", trigger_name, msg))
         },
         OpError::BatchFailed(msg) => {
-            OpError::BatchFailed(format!("Batch op '{}' failed: {}", op_name, msg))
+            OpError::BatchFailed(format!("Batch op '{}' failed: {}", trigger_name, msg))
         },
         OpError::Aborted(reason) => {
             // Aborted errors should preserve their nature and not be wrapped as execution failures
-            OpError::Aborted(format!("Op '{}' aborted: {}", op_name, reason))
+            OpError::Aborted(format!("Op '{}' aborted: {}", trigger_name, reason))
+        },
+        OpError::Trigger(msg) => {
+            OpError::Trigger(format!("Op '{}' internal error: {}", trigger_name, msg))
         },
         OpError::Other(boxed_error) => {
-            OpError::ExecutionFailed(format!("Op '{}' failed: {}", op_name, boxed_error))
+            OpError::ExecutionFailed(format!("Op '{}' failed: {}", trigger_name, boxed_error))
         },
     }
 }
@@ -102,8 +105,8 @@ mod tests {
     }
 
     #[test] 
-    fn test_caller_op_name() {
-        let name = get_caller_op_name();
+    fn test_caller_trigger_name() {
+        let name = get_caller_trigger_name();
         assert!(name.contains("ops"));
         assert!(name.contains("::"));
     }

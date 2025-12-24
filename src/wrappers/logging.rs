@@ -17,7 +17,7 @@ const RESET: &str = "\x1b[0m";
 
 pub struct LoggingWrapper<T> {
     wrapped_op: Box<dyn Op<T>>,
-    op_name: String,
+    trigger_name: String,
     logger_name: Option<String>,
 }
 
@@ -26,7 +26,7 @@ impl<T> LoggingWrapper<T> {
     pub fn new(op: Box<dyn Op<T>>, name: String) -> Self {
         Self {
             wrapped_op: op,
-            op_name: name,
+            trigger_name: name,
             logger_name: None,
         }
     }
@@ -36,7 +36,7 @@ impl<T> LoggingWrapper<T> {
     pub fn with_logger(op: Box<dyn Op<T>>, name: String, logger_name: String) -> Self {
         Self {
             wrapped_op: op,
-            op_name: name,
+            trigger_name: name,
             logger_name: Some(logger_name),
         }
     }
@@ -52,7 +52,7 @@ impl<T> LoggingWrapper<T> {
             logger = self.get_logger_name(),
             "{}Starting op: {}{}", 
             YELLOW, 
-            self.op_name,
+            self.trigger_name,
             RESET
         );
     }
@@ -64,7 +64,7 @@ impl<T> LoggingWrapper<T> {
             logger = self.get_logger_name(),
             "{}Op '{}' completed in {:.3} seconds{}", 
             GREEN,
-            self.op_name, 
+            self.trigger_name, 
             seconds,
             RESET
         );
@@ -77,7 +77,7 @@ impl<T> LoggingWrapper<T> {
             logger = self.get_logger_name(),
             "{}Op '{}' failed after {:.3} seconds: {:?}{}", 
             RED,
-            self.op_name,
+            self.trigger_name,
             seconds, 
             error,
             RESET
@@ -107,7 +107,7 @@ where
             Err(error) => {
                 self.log_op_failure(error, duration);
                 // Re-wrap error with op context (matches Java behavior)
-                return Err(crate::ops::wrap_nested_op_exception(&self.op_name, 
+                return Err(crate::ops::wrap_nested_op_exception(&self.trigger_name, 
                     OpError::ExecutionFailed(format!("{:?}", error))));
             }
         }
@@ -127,7 +127,7 @@ pub fn create_context_aware_logger<T>(op: Box<dyn Op<T>>) -> LoggingWrapper<T>
 where 
     T: Send + 'static,
 {
-    let caller_name = crate::ops::get_caller_op_name();
+    let caller_name = crate::ops::get_caller_trigger_name();
     LoggingWrapper::with_logger(op, caller_name.clone(), caller_name)
 }
 

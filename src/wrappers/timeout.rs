@@ -12,7 +12,7 @@ use tracing::{warn, info};
 pub struct TimeBoundWrapper<T> {
     wrapped_op: Box<dyn Op<T>>,
     timeout_duration: Duration,
-    op_name: Option<String>,
+    trigger_name: Option<String>,
     warn_on_timeout: bool,
 }
 
@@ -22,7 +22,7 @@ impl<T> TimeBoundWrapper<T> {
         Self {
             wrapped_op: op,
             timeout_duration: timeout,
-            op_name: None,
+            trigger_name: None,
             warn_on_timeout: true,
         }
     }
@@ -32,7 +32,7 @@ impl<T> TimeBoundWrapper<T> {
         Self {
             wrapped_op: op,
             timeout_duration: timeout,
-            op_name: Some(name),
+            trigger_name: Some(name),
             warn_on_timeout: true,
         }
     }
@@ -42,14 +42,14 @@ impl<T> TimeBoundWrapper<T> {
         Self {
             wrapped_op: op,
             timeout_duration: timeout,
-            op_name: None,
+            trigger_name: None,
             warn_on_timeout: warn,
         }
     }
 
     /// Get op name for logging (fallback to generic name)
-    fn get_op_name(&self) -> &str {
-        self.op_name.as_deref().unwrap_or("TimeBoundOp")
+    fn get_trigger_name(&self) -> &str {
+        self.trigger_name.as_deref().unwrap_or("TimeBoundOp")
     }
 
     /// Log timeout warning (matches Java TimeBoundOpWrapper behavior)
@@ -57,7 +57,7 @@ impl<T> TimeBoundWrapper<T> {
         if self.warn_on_timeout {
             warn!(
                 "Op '{}' was terminated due to timeout after {:?}",
-                self.get_op_name(),
+                self.get_trigger_name(),
                 self.timeout_duration
             );
         }
@@ -69,7 +69,7 @@ impl<T> TimeBoundWrapper<T> {
         if timeout_ratio > 0.8 {  // Completed using more than 80% of timeout
             info!(
                 "Op '{}' completed in {:.3}s ({}% of {:?} timeout)",
-                self.get_op_name(),
+                self.get_trigger_name(),
                 duration.as_secs_f64(),
                 (timeout_ratio * 100.0) as u32,
                 self.timeout_duration
@@ -109,7 +109,7 @@ where
     fn metadata(&self) -> OpMetadata {
         // Pass through metadata from wrapped op with timeout info
         let mut metadata = self.wrapped_op.metadata();
-        if let Some(ref name) = self.op_name {
+        if let Some(ref name) = self.trigger_name {
             metadata.description = Some(format!("{} (timeout: {:?})", name, self.timeout_duration));
         }
         metadata
@@ -125,7 +125,7 @@ pub fn create_timeout_wrapper_with_caller_name<T>(
 where 
     T: Send + 'static,
 {
-    let caller_name = crate::ops::get_caller_op_name();
+    let caller_name = crate::ops::get_caller_trigger_name();
     TimeBoundWrapper::with_name(op, timeout, caller_name)
 }
 
@@ -134,18 +134,18 @@ where
 pub fn create_logged_timeout_wrapper<T>(
     op: Box<dyn Op<T>>,
     timeout: Duration,
-    op_name: String,
+    trigger_name: String,
 ) -> crate::wrappers::logging::LoggingWrapper<T>
 where 
     T: Send + 'static,
 {
     // First wrap with timeout
-    let timeout_wrapper = TimeBoundWrapper::with_name(op, timeout, op_name.clone());
+    let timeout_wrapper = TimeBoundWrapper::with_name(op, timeout, trigger_name.clone());
     
     // Then wrap with logging
     crate::wrappers::logging::LoggingWrapper::new(
         Box::new(timeout_wrapper),
-        format!("TimeBound[{}]", op_name)
+        format!("TimeBound[{}]", trigger_name)
     )
 }
 
