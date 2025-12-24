@@ -115,7 +115,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     println!("Op request created:");
     println!("  ID: {}", op_request.id);
-    println!("  Op: {}", op_request.op_name);
+    println!("  Op: {}", op_request.trigger_name);
     println!("  Created: {}", op_request.created_at);
     
     // Simulate saving (not actually implemented)

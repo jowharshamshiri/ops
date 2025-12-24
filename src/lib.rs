@@ -9,6 +9,7 @@ pub mod ops;
 pub mod macros;
 pub mod loop_op;
 pub mod structured_queries;
+pub mod trigger;
 
 #[cfg(test)]
 mod control_flow_tests;
@@ -22,10 +23,11 @@ pub use loop_op::LoopOp;
 pub use wrappers::logging::LoggingWrapper;
 pub use wrappers::timeout::TimeBoundWrapper;
 pub use wrappers::validating::ValidatingWrapper;
-pub use ops::{perform, get_caller_op_name, wrap_nested_op_exception};
+pub use ops::{perform, get_caller_trigger_name, wrap_nested_op_exception};
 pub use macros::AggregationStrategy;
 pub use macros::BridgeOp;
 pub use structured_queries::{ListingOutline, OutlineEntry, OutlineMetadata, FlatOutlineEntry, generate_outline_schema};
+pub use trigger::*;
 
 pub type OpResult<T> = std::result::Result<T, OpError>;
 

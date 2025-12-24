@@ -155,17 +155,17 @@ pub struct ValidationWarning {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OpRequest {
     pub id: String,
-    pub op_name: String,
+    pub trigger_name: String,
     pub dry_context: DryContext,
     pub created_at: chrono::DateTime<chrono::Utc>,
     pub metadata: Option<OpMetadata>,
 }
 
 impl OpRequest {
-    pub fn new(op_name: impl Into<String>) -> Self {
+    pub fn new(trigger_name: impl Into<String>) -> Self {
         Self {
             id: uuid::Uuid::new_v4().to_string(),
-            op_name: op_name.into(),
+            trigger_name: trigger_name.into(),
             dry_context: DryContext::new(),
             created_at: chrono::Utc::now(),
             metadata: None,
@@ -299,7 +299,7 @@ mod tests {
             .with_data("image_path", "/tmp/test.jpg")
             .with_data("width", 800);
 
-        assert_eq!(request.op_name, "ProcessImage");
+        assert_eq!(request.trigger_name, "ProcessImage");
         assert_eq!(
             request.dry_context.get::<String>("image_path").unwrap(),
             "/tmp/test.jpg"

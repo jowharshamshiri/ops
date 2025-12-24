@@ -18,6 +18,9 @@ pub enum OpError {
     #[error("Op aborted: {0}")]
     Aborted(String),
     
+    #[error("Trigger error: {0}")]
+    Trigger(String),
+    
     #[error(transparent)]
     Other(#[from] Box<dyn std::error::Error + Send + Sync>),
 }
@@ -30,6 +33,7 @@ impl Clone for OpError {
             Self::Context(msg) => Self::Context(msg.clone()),
             Self::BatchFailed(msg) => Self::BatchFailed(msg.clone()),
             Self::Aborted(msg) => Self::Aborted(msg.clone()),
+            Self::Trigger(msg) => Self::Trigger(msg.clone()),
             Self::Other(boxed_error) => Self::ExecutionFailed(format!("{}", boxed_error)),
         }
     }

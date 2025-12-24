@@ -89,7 +89,7 @@ async fn main() -> OpResult<()> {
     println!("  • dry_get_key!(ctx, key)");
     println!("  • dry_require!(ctx, var)");
     println!("  • dry_require_key!(ctx, key)");
-    println!("  • dry_result!(ctx, op_name, result)");
+    println!("  • dry_result!(ctx, trigger_name, result)");
     
     println!("WET CONTEXT:");
     println!("  • wet_put_ref!(ctx, var, value) / wet_put_ref!(ctx, var)");
