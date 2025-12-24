@@ -1,12 +1,12 @@
-use std::future::Future;
+use std::{fmt::Debug, future::Future, sync::Arc};
 use std::pin::Pin;
 use async_trait::async_trait;
 use serde_json::json;
 use crate::{DryContext, Op, OpMetadata, OpResult, WetContext};
 
-type AsyncHandler = Box<dyn Fn(&mut DryContext, &mut WetContext) -> Pin<Box<dyn Future<Output = OpResult<bool>> + Send>> + Send + Sync>;
+type AsyncHandler = Arc<dyn Fn(&mut DryContext, &mut WetContext) -> Pin<Box<dyn Future<Output = OpResult<bool>> + Send>> + Send + Sync>;
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct InlinePredicateOp {
 	handler: AsyncHandler,
 }
@@ -17,7 +17,7 @@ impl InlinePredicateOp {
         F: Fn(&mut DryContext, &mut WetContext) -> Fut + Send + Sync + 'static,
         Fut: Future<Output = OpResult<bool>> + Send + 'static,
     {
-        let boxed_handler: AsyncHandler = Box::new(move |dry, wet| {
+        let boxed_handler: AsyncHandler = Arc::new(move |dry, wet| {
             Box::pin(handler(dry, wet))
         });
         
@@ -31,6 +31,13 @@ impl InlinePredicateOp {
 impl Default for InlinePredicateOp {
 	fn default() -> Self {
 		Self::new(|_, _| async { Ok(true) })
+	}
+}
+
+impl Debug for InlinePredicateOp {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_struct("InlinePredicateOp")
+		 .finish()
 	}
 }
 
