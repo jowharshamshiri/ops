@@ -43,6 +43,10 @@ impl TriggerEngine {
         }
         Ok(())
     }
+
+	pub fn registry(&self) -> &TriggerRegistry {
+		&self.registery
+	}
 }
 
 impl Default for TriggerEngine {
