@@ -47,6 +47,10 @@ impl TriggerEngine {
 	pub fn registry(&self) -> &TriggerRegistry {
 		&self.registery
 	}
+	
+	pub fn registry_mut(&mut self) -> &mut TriggerRegistry {
+		&mut self.registery
+	}
 }
 
 impl Default for TriggerEngine {
