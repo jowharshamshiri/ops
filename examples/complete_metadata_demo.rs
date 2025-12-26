@@ -2,7 +2,7 @@ use ops::prelude::*;
 use ops::{
     dry_put, dry_require,
     wet_put_ref, wet_require_ref,
-    OpRequest,
+    TriggerFuse,
 };
 use serde_json::json;
 use std::sync::Arc;
@@ -366,21 +366,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let data_output_validation = data_metadata.validate_output(&data_result)?;
     println!("Output validation: {}", if data_output_validation.is_valid { "✓ passed" } else { "✗ failed" });
     
-    // Example 3: Demonstrate OpRequest with metadata
-    println!("\n3. OpRequest with Metadata");
+    // Example 3: Demonstrate TriggerFuse with metadata
+    println!("\n3. TriggerFuse with Metadata");
     
-    let op_request = OpRequest::new("UserRegistrationOp")
+    let trigger_fuse = TriggerFuse::new("UserRegistrationOp")
         .with_data("username", "alice_smith")
         .with_data("email", "alice@example.com")
         .with_data("age", 30)
         .with_data("is_premium", false)
         .with_metadata(user_metadata);
         
-    println!("OpRequest created with ID: {}", op_request.id);
-    println!("OpRequest validation and context extraction...");
+    println!("TriggerFuse created with ID: {}", trigger_fuse.id);
+    println!("TriggerFuse validation and context extraction...");
     
-    let mut validated_dry = op_request.validate_and_get_dry_context()?;
-    println!("✓ OpRequest dry context validated successfully");
+    let mut validated_dry = trigger_fuse.validate_and_get_dry_context()?;
+    println!("✓ TriggerFuse dry context validated successfully");
     
     // Show how to reconstruct and execute later
     println!("Later execution with different services...");

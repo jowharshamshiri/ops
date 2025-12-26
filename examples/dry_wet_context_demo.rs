@@ -1,5 +1,5 @@
 use ops::prelude::*;
-use ops::OpRequest;
+use ops::TriggerFuse;
 use serde_json::json;
 
 // Example service that would be in the wet context
@@ -109,21 +109,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     // Demonstrate op request persistence (simulated)
     println!("Creating op request for later execution...");
-    let op_request = OpRequest::new("QueryOp")
+    let trigger_fuse = TriggerFuse::new("QueryOp")
         .with_data("query", "SELECT COUNT(*) FROM orders")
         .with_metadata(op.metadata());
     
     println!("Op request created:");
-    println!("  ID: {}", op_request.id);
-    println!("  Op: {}", op_request.trigger_name);
-    println!("  Created: {}", op_request.created_at);
+    println!("  ID: {}", trigger_fuse.id);
+    println!("  Op: {}", trigger_fuse.trigger_name);
+    println!("  Created: {}", trigger_fuse.created_at);
     
     // Simulate saving (not actually implemented)
-    op_request.save()?;
+    trigger_fuse.save()?;
     println!("✓ Op request saved (simulated)\n");
     
     // Later: validate and get dry context
-    let loaded_dry = op_request.validate_and_get_dry_context()?;
+    let loaded_dry = trigger_fuse.validate_and_get_dry_context()?;
     println!("Loaded dry context:");
     println!("  query: {:?}", loaded_dry.get::<String>("query"));
     

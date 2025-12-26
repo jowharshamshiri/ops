@@ -11,8 +11,11 @@ pub use engine::*;
 
 #[async_trait]
 pub trait Trigger: Send + Sync {
+	fn name(&self) -> String;
+	
 	fn predicate(&self) -> Arc<dyn Op<bool>>;
     fn actions(&self) -> Vec<Arc<dyn Op<()>>>;
+
 	async fn perform(&self, dry: &mut DryContext, wet: &mut WetContext) -> OpResult<()> {
 		let should = self.predicate().perform(dry, wet).await?;
 		if should {
@@ -24,7 +27,7 @@ pub trait Trigger: Send + Sync {
 	
 	fn metadata(&self) -> OpMetadata {
 		OpMetadata {
-			name: format!("Trigger {} with {} actions", self.predicate().metadata().name, self.actions().len()),
+			name: format!("Trigger {} with {} actions", self.name(), self.actions().len()),
 			description: None,
 			input_schema: None,
 			reference_schema: None,

@@ -1,5 +1,7 @@
 use crate::prelude::*;
 use crate::{DryContext, WetContext};
+
+use serde_json::{json, Value};
 use serde_json::Value as JsonValue;
 
 /// Metadata describing an op's requirements and schemas
@@ -151,9 +153,9 @@ pub struct ValidationWarning {
     pub message: String,
 }
 
-/// OpRequest represents a saved request to execute an op later
+/// TriggerFuse represents a saved request to execute an op later
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct OpRequest {
+pub struct TriggerFuse {
     pub id: String,
     pub trigger_name: String,
     pub dry_context: DryContext,
@@ -161,7 +163,7 @@ pub struct OpRequest {
     pub metadata: Option<OpMetadata>,
 }
 
-impl OpRequest {
+impl TriggerFuse {
     pub fn new(trigger_name: impl Into<String>) -> Self {
         Self {
             id: uuid::Uuid::new_v4().to_string(),
@@ -198,14 +200,14 @@ impl OpRequest {
     pub fn save(&self) -> Result<(), OpError> {
         // TODO: Implement persistence
         // For now, this is a placeholder
-        debug!("Saving OpRequest: {}", self.id);
+        debug!("Saving TriggerFuse: {}", self.id);
         Ok(())
     }
 
     pub fn load(_id: &str) -> Result<Self, OpError> {
         // TODO: Implement persistence loading
         // For now, this is a placeholder
-        Err(OpError::Context("OpRequest loading not yet implemented".to_string()))
+        Err(OpError::Context("TriggerFuse loading not yet implemented".to_string()))
     }
 }
 
@@ -294,8 +296,8 @@ mod tests {
     }
 
     #[test]
-    fn test_op_request() {
-        let request = OpRequest::new("ProcessImage")
+    fn test_trigger_fuse() {
+        let request = TriggerFuse::new("ProcessImage")
             .with_data("image_path", "/tmp/test.jpg")
             .with_data("width", 800);
 

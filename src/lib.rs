@@ -17,7 +17,7 @@ mod control_flow_tests;
 pub use contexts::{DryContext, WetContext};
 pub use error::OpError;
 pub use op::Op;
-pub use op_metadata::{OpMetadata, OpRequest, ValidationReport};
+pub use op_metadata::{OpMetadata, TriggerFuse, ValidationReport};
 pub use batch::BatchOp;
 pub use loop_op::LoopOp;
 pub use wrappers::logging::LoggingWrapper;
