@@ -1098,12 +1098,14 @@ macro_rules! wire_trigger {
             $crate::void_op!([<$wrapper_name VoidOp>], $op_type);
             
             pub struct $wrapper_name {
+				name: String,
                 action: [<$wrapper_name VoidOp>],
             }
 
             impl $wrapper_name {
                 pub fn new() -> Self {
                     Self {
+						name: $name.to_string(),
                         action: [<$wrapper_name VoidOp>]::new(),
                     }
                 }
@@ -1118,6 +1120,10 @@ macro_rules! wire_trigger {
 
         #[async_trait::async_trait]
         impl $crate::Trigger for $wrapper_name {
+			fn name(&self) -> String {
+				self.name.clone()
+			}
+
 			fn actions(&self) -> Vec<Arc<dyn $crate::Op<()>>> {
 				vec![Arc::new(self.action.clone())]
 			}
@@ -1134,6 +1140,7 @@ macro_rules! wire_trigger {
             $crate::void_op!([<$wrapper_name VoidOp>], $op_type);
             
             pub struct $wrapper_name {
+				name: String,
                 action: [<$wrapper_name VoidOp>],
                 predicate: Arc<dyn $crate::Op<bool>>,
             }
@@ -1141,13 +1148,15 @@ macro_rules! wire_trigger {
             impl $wrapper_name {
                 pub fn new() -> Self {
                     Self {
+						name: $name.to_string(),
                         action: [<$wrapper_name VoidOp>]::new(),
                         predicate: Arc::new($predicate),
                     }
                 }
                 
-                pub fn with_predicate(predicate: Arc<dyn $crate::Op<bool>>) -> Self {
+                pub fn with_predicate(name: String, predicate: Arc<dyn $crate::Op<bool>>) -> Self {
                     Self {
+						name,
                         action: [<$wrapper_name VoidOp>]::new(),
                         predicate,
                     }
@@ -1163,6 +1172,9 @@ macro_rules! wire_trigger {
 
 		#[async_trait::async_trait]
 		impl $crate::Trigger for $wrapper_name {
+			fn name(&self) -> String {
+				self.name.clone()
+			}
 			fn predicate(&self) -> Arc<dyn $crate::Op<bool>> {
 				Arc::clone(&self.predicate)
 			}

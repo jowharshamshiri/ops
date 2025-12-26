@@ -26,7 +26,7 @@ impl TriggerRegistry {
         T: Fn() -> Box<dyn Trigger> + Send + Sync + 'static,
     {
         let temp_trigger = (factory)();
-        let trigger_name = crate::trigger::Trigger::metadata(&*temp_trigger).name.to_string();
+        let trigger_name = temp_trigger.name();
         info!("Registered trigger {}", trigger_name);
 		if self.factories.contains_key(&trigger_name) {
 			return Err(OpError::Trigger(format!("Trigger type {} is already registered", trigger_name)));
@@ -43,7 +43,7 @@ impl TriggerRegistry {
         match self.factories.get(trigger_name) {
             Some(factory) => Ok(factory()),
             None => Err(format!(
-                "No trigger registered for trigger name: {}, Registered types: {:?}",
+                "No trigger registered for trigger name: {}, Registered triggers: {:?}",
                 trigger_name,
                 self.list_names()
             )),
