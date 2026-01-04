@@ -148,7 +148,7 @@ async fn main() -> OpResult<()> {
     let mut dry = DryContext::new();
     let mut wet = WetContext::new();
     
-    println!("🔄 LOOP CONTROL FLOW DEMONSTRATIONS 🔄\n");
+    println!(" LOOP CONTROL FLOW DEMONSTRATIONS \n");
     
     // Example 1: continue_loop demonstration
     println!("=== Example 1: continue_loop! behavior ===");
@@ -156,12 +156,12 @@ async fn main() -> OpResult<()> {
     let normal_loop = NormalLoopWithContinue::new();
     match normal_loop.perform(&mut dry, &mut wet).await {
         Ok(results) => {
-            println!("✅ Normal loop completed with {} results:", results.len());
+            println!("OK Normal loop completed with {} results:", results.len());
             for (i, result) in results.iter().enumerate() {
                 println!("  Result {}: {}", i, result);
             }
         }
-        Err(e) => println!("❌ Error: {}", e),
+        Err(e) => println!("ERR Error: {}", e),
     }
     
     println!("\n=== Example 2: break_loop! behavior ===");
@@ -170,12 +170,12 @@ async fn main() -> OpResult<()> {
     let break_loop = LoopWithBreak::new();
     match break_loop.perform(&mut dry, &mut wet).await {
         Ok(results) => {
-            println!("✅ Loop with break completed with {} results:", results.len());
+            println!("OK Loop with break completed with {} results:", results.len());
             for (i, result) in results.iter().enumerate() {
                 println!("  Result {}: {}", i, result);
             }
         }
-        Err(e) => println!("❌ Error: {}", e),
+        Err(e) => println!("ERR Error: {}", e),
     }
     
     println!("\n=== Example 3: abort! behavior ===");
@@ -184,12 +184,12 @@ async fn main() -> OpResult<()> {
     let abort_loop = LoopWithAbort::new();
     match abort_loop.perform(&mut dry, &mut wet).await {
         Ok(results) => {
-            println!("✅ Loop with abort completed with {} results:", results.len());
+            println!("OK Loop with abort completed with {} results:", results.len());
             for (i, result) in results.iter().enumerate() {
                 println!("  Result {}: {}", i, result);
             }
         }
-        Err(e) => println!("❌ Expected abort error: {}", e),
+        Err(e) => println!("ERR Expected abort error: {}", e),
     }
     
     println!("\n=== Example 4: Condition-based loop ===");
@@ -198,12 +198,12 @@ async fn main() -> OpResult<()> {
     let complex_loop = ComplexControlFlow::new();
     match complex_loop.perform(&mut dry, &mut wet).await {
         Ok(result) => {
-            println!("✅ Complex loop completed with result: {}", result);
+            println!("OK Complex loop completed with result: {}", result);
         }
-        Err(e) => println!("❌ Error: {}", e),
+        Err(e) => println!("ERR Error: {}", e),
     }
     
-    println!("\n🎯 SUMMARY:");
+    println!("\n SUMMARY:");
     println!("• continue_loop!: Skips rest of current iteration, moves to next");
     println!("• break_loop!: Exits the entire loop immediately");
     println!("• abort!: Stops everything and returns an error");

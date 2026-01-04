@@ -188,7 +188,7 @@ impl Op<()> for OutlineAnalysisOp {
         let outline: ListingOutline = dry.get("extracted_outline")
             .ok_or_else(|| OpError::ExecutionFailed("No Outline found in context".to_string()))?;
         
-        println!("\n📚 TABLE OF CONTENTS ANALYSIS");
+        println!("\n TABLE OF CONTENTS ANALYSIS");
         println!("===============================");
         
         if let Some(title) = &outline.document_title {
@@ -201,12 +201,12 @@ impl Op<()> for OutlineAnalysisOp {
         println!("Has page leaders: {}", outline.metadata.has_leaders);
         println!("Confidence: {:.1}%", outline.confidence * 100.0);
         
-        println!("\n📑 HIERARCHICAL STRUCTURE:");
+        println!("\nHIERARCHICAL STRUCTURE:");
         for entry in &outline.entries {
             print_entry(entry, 0);
         }
         
-        println!("\n📋 FLAT VIEW:");
+        println!("\n FLAT VIEW:");
         let flat = outline.flatten();
         for (i, entry) in flat.iter().enumerate() {
             let indent = "  ".repeat(entry.level as usize);
@@ -223,7 +223,7 @@ impl Op<()> for OutlineAnalysisOp {
             );
         }
         
-        println!("\n🔍 LEVEL ANALYSIS:");
+        println!("\n LEVEL ANALYSIS:");
         for level in 0..=outline.max_depth() {
             let entries_at_level = outline.entries_at_level(level);
             println!("Level {}: {} entries", level, entries_at_level.len());
@@ -294,7 +294,7 @@ async fn main() -> OpResult<()> {
     let mut dry = DryContext::new();
     let mut wet = WetContext::new();
     
-    println!("🚀 TABLE OF CONTENTS EXTRACTION DEMO");
+    println!(" TABLE OF CONTENTS EXTRACTION DEMO");
     println!("=====================================\n");
     
     // Step 1: Load content
@@ -312,7 +312,7 @@ async fn main() -> OpResult<()> {
     let analysis_pipeline = OutlineAnalysisPipeline::new();
     analysis_pipeline.perform(&mut dry, &mut wet).await?;
     
-    println!("\n✅ SCHEMA VALIDATION");
+    println!("\nOK SCHEMA VALIDATION");
     println!("====================");
     let schema = generate_outline_schema();
     println!("Generated JSON Schema with {} properties", 
@@ -321,7 +321,7 @@ async fn main() -> OpResult<()> {
         schema["definitions"]["OutlineEntry"]["properties"]["entry_type"]["enum"]
             .as_array().unwrap().len());
     
-    println!("\n🎯 USE CASES SUPPORTED:");
+    println!("\n USE CASES SUPPORTED:");
     println!("- Simple flat TOCs (title + page)");
     println!("- Chapter-based hierarchies");
     println!("- Part → Chapter → Section structures");

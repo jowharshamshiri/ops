@@ -18,7 +18,7 @@ impl LoadContentOp {
 impl Op<()> for LoadContentOp {
     async fn perform(&self, dry: &mut DryContext, _wet: &mut WetContext) -> OpResult<()> {
         let iteration = dry.get::<usize>(&self.prefix).unwrap_or(0);
-        println!("📄 Loading content for iteration {}", iteration);
+        println!(" Loading content for iteration {}", iteration);
         
         // Simulate content loading
         dry.insert("content_length", iteration * 1000);
@@ -45,7 +45,7 @@ impl InsertDataOp {
 #[async_trait]
 impl Op<()> for InsertDataOp {
     async fn perform(&self, dry: &mut DryContext, _wet: &mut WetContext) -> OpResult<()> {
-        println!("💾 Inserting data with config: {}", self.config);
+        println!(" Inserting data with config: {}", self.config);
         
         // Simulate AI analysis result
         let iteration = dry.get::<usize>("cso").unwrap_or(0);
@@ -56,7 +56,7 @@ impl Op<()> for InsertDataOp {
         };
         
         dry.insert("content_quality", content_quality.to_string());
-        println!("   📊 AI Analysis: Content quality is {}", content_quality);
+        println!("    AI Analysis: Content quality is {}", content_quality);
         
         Ok(())
     }
@@ -75,7 +75,7 @@ impl Op<()> for BitChoiceOp {
         let content_quality = dry.get::<String>("content_quality")
             .unwrap_or_else(|| "unknown".to_string());
         
-        println!("🤖 BitChoice processing quality: {}", content_quality);
+        println!(" BitChoice processing quality: {}", content_quality);
         
         Ok(())
     }
@@ -95,30 +95,30 @@ impl Op<()> for ReactToContentSelectionResponse {
             .unwrap_or_else(|| "unknown".to_string());
         let iteration = dry.get::<usize>("cso").unwrap_or(0);
         
-        println!("🎯 Reacting to content selection: {}", content_quality);
+        println!(" Reacting to content selection: {}", content_quality);
         
         match content_quality.as_str() {
             "insufficient" => {
                 if iteration >= 4 {
-                    println!("   ❌ Too many failed attempts, giving up");
+                    println!("   ERR Too many failed attempts, giving up");
                     break_loop!(dry); // Stop trying after 5 attempts
                 } else {
-                    println!("   🔄 Content insufficient, will try again");
+                    println!("    Content insufficient, will try again");
                     dry.insert("should_continue", true);
                 }
             }
             "adequate" => {
-                println!("   ✅ Content is adequate, we can proceed");
+                println!("   OK Content is adequate, we can proceed");
                 dry.insert("selection_result", "adequate");
                 break_loop!(dry); // We got acceptable content, stop
             }
             "excellent" => {
-                println!("   🌟 Excellent content found!");
+                println!("    Excellent content found!");
                 dry.insert("selection_result", "excellent");
                 break_loop!(dry); // Perfect content, definitely stop
             }
             _ => {
-                println!("   ⚠️ Unknown quality, continuing...");
+                println!("   WARN Unknown quality, continuing...");
                 dry.insert("should_continue", true);
             }
         }
@@ -153,7 +153,7 @@ struct StartTransactionOp;
 #[async_trait]
 impl Op<()> for StartTransactionOp {
     async fn perform(&self, _dry: &mut DryContext, _wet: &mut WetContext) -> OpResult<()> {
-        println!("🚀 Starting transaction");
+        println!(" Starting transaction");
         Ok(())
     }
     
@@ -179,7 +179,7 @@ async fn main() -> OpResult<()> {
     let mut dry = DryContext::new();
     let mut wet = WetContext::new();
     
-    println!("🎯 CONTENT SELECTION WITH INTELLIGENT BREAK/CONTINUE 🎯\n");
+    println!(" CONTENT SELECTION WITH INTELLIGENT BREAK/CONTINUE \n");
     
     // Test 1: Content selection that finds adequate content
     println!("=== Test 1: Finding adequate content ===");
@@ -189,9 +189,9 @@ async fn main() -> OpResult<()> {
     match content_op.perform(&mut dry, &mut wet).await {
         Ok(_) => {
             let result = dry.get::<String>("selection_result");
-            println!("✅ Content selection completed with result: {:?}", result);
+            println!("OK Content selection completed with result: {:?}", result);
         }
-        Err(e) => println!("❌ Error: {}", e),
+        Err(e) => println!("ERR Error: {}", e),
     }
     
     println!("\n=== Test 2: Full extraction pipeline ===");
@@ -203,12 +203,12 @@ async fn main() -> OpResult<()> {
     match extraction_pipeline.perform(&mut dry, &mut wet).await {
         Ok(_) => {
             let result = dry.get::<String>("selection_result");
-            println!("✅ Extraction pipeline completed with result: {:?}", result);
+            println!("OK Extraction pipeline completed with result: {:?}", result);
         }
-        Err(e) => println!("❌ Error: {}", e),
+        Err(e) => println!("ERR Error: {}", e),
     }
     
-    println!("\n🎉 SUMMARY:");
+    println!("\n SUMMARY:");
     println!("• Your ContentSelectionOp now intelligently uses break_loop! to stop when:");
     println!("  - Content quality is 'adequate' or 'excellent'");
     println!("  - Too many failed attempts (>4)");
