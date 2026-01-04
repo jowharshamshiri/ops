@@ -71,9 +71,9 @@ repeat_until! {
 batch! {
     CloseReadOpBatch<()> -> unit = [
         MockOp::new("StartTransactionOp"),
-        ContentSelectionOp::new(),           // ✅ Now implements Op<()>
-        ContentSelectionLoopOp::new(),       // ✅ Also implements Op<()>
-        ContentSelectionWhileOp::new()       // ✅ Also implements Op<()>
+        ContentSelectionOp::new(),           // OK Now implements Op<()>
+        ContentSelectionLoopOp::new(),       // OK Also implements Op<()>
+        ContentSelectionWhileOp::new()       // OK Also implements Op<()>
     ]
 }
 
@@ -106,7 +106,7 @@ async fn main() -> OpResult<()> {
     dry.insert("cso_limit", 2_usize);
     dry.insert("should_continue", true);
     
-    println!("🎉 SOLUTION DEMONSTRATION 🎉\n");
+    println!(" SOLUTION DEMONSTRATION \n");
     
     println!("1. Sequential Content Selection:");
     let op1 = ContentSelectionOp::new();
@@ -125,9 +125,9 @@ async fn main() -> OpResult<()> {
     let extraction_batch = CloseReadOpBatch::new();
     extraction_batch.perform(&mut dry, &mut wet).await?;
     
-    println!("\n✅ All ops are now fully composable and interchangeable!");
-    println!("✅ No more 'trait bound not satisfied' errors!");
-    println!("✅ Clean, type-safe, and powerful macro system!");
+    println!("\nOK All ops are now fully composable and interchangeable!");
+    println!("OK No more 'trait bound not satisfied' errors!");
+    println!("OK Clean, type-safe, and powerful macro system!");
     
     Ok(())
 }

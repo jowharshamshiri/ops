@@ -23,16 +23,16 @@ impl Op<String> for OuterOp {
         let outer_iter = dry.get::<usize>("outer_counter").unwrap_or(0);
         let inner_iter = dry.get::<usize>("inner_counter").unwrap_or(0);
         
-        println!("🔵 OuterOp[{}] - Outer:{} Inner:{} - Action: {}", 
+        println!("OuterOp[{}] - Outer:{} Inner:{} - Action: {}", 
                 self.id, outer_iter, inner_iter, self.action);
         
         match self.action.as_str() {
             "break_inner" if outer_iter == 1 && inner_iter == 1 => {
-                println!("   💥 Breaking inner loop!");
+                println!("    Breaking inner loop!");
                 break_loop!(dry); // Breaks the innermost (current) loop
             }
             "break_outer" if outer_iter == 2 && inner_iter == 0 => {
-                println!("   🚪 Breaking outer loop!");
+                println!("   Breaking outer loop!");
                 // We need to break the outer loop, but we're in inner context
                 // So we need to get the outer loop ID somehow
                 if let Some(outer_loop_id) = dry.get::<String>("outer_loop_id") {
@@ -40,11 +40,11 @@ impl Op<String> for OuterOp {
                 }
             }
             "continue_inner" if outer_iter == 0 && inner_iter == 2 => {
-                println!("   ⏭️ Continuing inner loop!");
+                println!("    Continuing inner loop!");
                 continue_loop!(dry); // Continues the innermost (current) loop
             }
             _ => {
-                println!("   ✅ Normal processing");
+                println!("   OK Normal processing");
             }
         }
         
@@ -73,7 +73,7 @@ impl Op<String> for InnerOp {
         let outer_iter = dry.get::<usize>("outer_counter").unwrap_or(0);
         let inner_iter = dry.get::<usize>("inner_counter").unwrap_or(0);
         
-        println!("🔴 InnerOp[{}] - Outer:{} Inner:{}", self.id, outer_iter, inner_iter);
+        println!(" InnerOp[{}] - Outer:{} Inner:{}", self.id, outer_iter, inner_iter);
         
         Ok(format!("InnerOp[{}]-{}-{}", self.id, outer_iter, inner_iter))
     }
@@ -106,13 +106,13 @@ impl Op<String> for ControlOp {
                 // Inner loop runs max 4 times per outer iteration
                 let should_continue = inner_iter < 3;
                 dry.insert("inner_should_continue", should_continue);
-                println!("🎮 InnerController: inner_iter={} -> should_continue={}", inner_iter, should_continue);
+                println!("InnerController: inner_iter={} -> should_continue={}", inner_iter, should_continue);
             }
             "outer_controller" => {
                 // Outer loop runs max 4 times total
                 let should_continue = outer_iter < 3;
                 dry.insert("outer_should_continue", should_continue);
-                println!("🎮 OuterController: outer_iter={} -> should_continue={}", outer_iter, should_continue);
+                println!("OuterController: outer_iter={} -> should_continue={}", outer_iter, should_continue);
             }
             _ => {}
         }
@@ -216,7 +216,7 @@ async fn main() -> OpResult<()> {
     let mut dry = DryContext::new();
     let mut wet = WetContext::new();
     
-    println!("🔄 NESTED LOOP SCOPED CONTROL DEMONSTRATION 🔄\n");
+    println!(" NESTED LOOP SCOPED CONTROL DEMONSTRATION \n");
     
     // Initialize conditions
     dry.insert("outer_should_continue", true);
@@ -235,7 +235,7 @@ async fn main() -> OpResult<()> {
     let outer_loop = OuterLoopWrapper::new();
     match outer_loop.perform(&mut dry, &mut wet).await {
         Ok(results) => {
-            println!("\n✅ Nested loop completed with {} results", results.len());
+            println!("\nOK Nested loop completed with {} results", results.len());
             println!("Results summary:");
             for (i, result) in results.iter().take(10).enumerate() {
                 println!("  {}: {}", i, result);
@@ -244,10 +244,10 @@ async fn main() -> OpResult<()> {
                 println!("  ... and {} more", results.len() - 10);
             }
         }
-        Err(e) => println!("❌ Error: {}", e),
+        Err(e) => println!("ERR Error: {}", e),
     }
     
-    println!("\n🎯 SUMMARY:");
+    println!("\n SUMMARY:");
     println!("• Each loop has unique UUID-based control variables");
     println!("• break_loop!() targets the current (innermost) loop");
     println!("• break_loop_scoped!() can target specific outer loops");

@@ -22,15 +22,15 @@ impl MockOp {
 impl Op<String> for MockOp {
     async fn perform(&self, dry: &mut DryContext, _wet: &mut WetContext) -> OpResult<String> {
         let result = format!("{}:{}", self.id, self.action);
-        println!("🔧 MockOp: {}", result);
+        println!(" MockOp: {}", result);
         
         match self.action.as_str() {
             "break" => {
-                println!("   💥 Breaking loop!");
+                println!("    Breaking loop!");
                 break_loop!(dry);
             }
             "continue" => {
-                println!("   ⏭️ Continuing loop!");
+                println!("    Continuing loop!");
                 continue_loop!(dry);
             }
             _ => {}
@@ -44,7 +44,7 @@ impl Op<String> for MockOp {
     }
 }
 
-// ✅ SOLUTION: All macros now support flexible return types with UUID-scoped control flow
+// OK SOLUTION: All macros now support flexible return types with UUID-scoped control flow
 
 // 1. Sequential batch operations
 batch! {
@@ -87,9 +87,9 @@ repeat_until! {
         condition: "outer_continue", 
         max_iterations: 3,
         ops: [
-            SequentialOps::new(),     // ✅ Nested batch
-            ForLoopOps::new(),        // ✅ Nested for-loop
-            WhileLoopOps::new()       // ✅ Nested while-loop
+            SequentialOps::new(),     // OK Nested batch
+            ForLoopOps::new(),        // OK Nested for-loop
+            WhileLoopOps::new()       // OK Nested while-loop
         ]
     }
 }
@@ -116,7 +116,7 @@ async fn main() -> OpResult<()> {
     let mut dry = DryContext::new();
     let mut wet = WetContext::new();
     
-    println!("🎯 SCOPED COMPOSABLE OPS FINAL DEMONSTRATION 🎯\n");
+    println!(" SCOPED COMPOSABLE OPS FINAL DEMONSTRATION \n");
     
     // Set up context variables
     dry.insert("for_limit", 3_usize);
@@ -160,13 +160,13 @@ async fn main() -> OpResult<()> {
     let outer_loop = OuterLoop::new();
     outer_loop.perform(&mut dry, &mut wet).await?;
     
-    println!("\n🎉 COMPLETE SOLUTION SUMMARY:");
-    println!("✅ UUID-scoped control flow - no conflicts between nested loops");
-    println!("✅ break_loop!() and continue_loop!() target current loop automatically");
-    println!("✅ All macros support flexible return types (all, last, first, unit, merge)");
-    println!("✅ Perfect composability - any op can be nested within any other");
-    println!("✅ Type safety - compile-time verification of all compositions");
-    println!("✅ Clean syntax - intuitive and readable macro definitions");
+    println!("\n COMPLETE SOLUTION SUMMARY:");
+    println!("OK UUID-scoped control flow - no conflicts between nested loops");
+    println!("OK break_loop!() and continue_loop!() target current loop automatically");
+    println!("OK All macros support flexible return types (all, last, first, unit, merge)");
+    println!("OK Perfect composability - any op can be nested within any other");
+    println!("OK Type safety - compile-time verification of all compositions");
+    println!("OK Clean syntax - intuitive and readable macro definitions");
     
     Ok(())
 }

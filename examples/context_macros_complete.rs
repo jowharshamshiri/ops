@@ -9,7 +9,7 @@ async fn main() -> OpResult<()> {
     let mut dry = DryContext::new();
     let mut wet = WetContext::new();
     
-    println!("🧪 COMPLETE CONTEXT MACROS DEMONSTRATION 🧪\n");
+    println!(" COMPLETE CONTEXT MACROS DEMONSTRATION \n");
     
     // === DRY CONTEXT MACROS ===
     println!("=== Dry Context Macros ===");
@@ -79,9 +79,9 @@ async fn main() -> OpResult<()> {
     println!("Required arc string: {}", required_arc_string);
     println!("Required string vec: {:?}", required_string_vec);
     
-    println!("\n✅ ALL CONTEXT MACROS WORKING PERFECTLY!");
+    println!("\nOK ALL CONTEXT MACROS WORKING PERFECTLY!");
     
-    println!("\n📋 COMPLETE MACRO SET:");
+    println!("\n COMPLETE MACRO SET:");
     println!("DRY CONTEXT:");
     println!("  • dry_put!(ctx, var) / dry_put!(ctx, var, value)");
     println!("  • dry_put_key!(ctx, key, value)");

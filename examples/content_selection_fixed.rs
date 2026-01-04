@@ -141,9 +141,9 @@ repeat_until! {
 batch! {
     CloseReadOpBatch<()> -> unit = [
         StartTransactionOp,
-        ContentSelectionOp::new(),           // ✅ Now implements Op<()>
-        ContentSelectionLoopOp::new(),       // ✅ Also implements Op<()>  
-        ContentSelectionWhileOp::new()       // ✅ Also implements Op<()>
+        ContentSelectionOp::new(),           // OK Now implements Op<()>
+        ContentSelectionLoopOp::new(),       // OK Also implements Op<()>  
+        ContentSelectionWhileOp::new()       // OK Also implements Op<()>
     ]
 }
 
