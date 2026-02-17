@@ -23,10 +23,10 @@ impl Op<()> for MockOp {
     }
 }
 
-/// SOLUTION: Enhanced Composable Macros
-/// 
-/// Problem: repeat! macro created Op<Vec<T>> but batch! expected Op<T>
-/// Solution: All macros now support flexible return types with aggregation strategies
+// SOLUTION: Enhanced Composable Macros
+//
+// Problem: repeat! macro created Op<Vec<T>> but batch! expected Op<T>
+// Solution: All macros now support flexible return types with aggregation strategies
 
 // OPTION 1: Use batch! with unit aggregation (recommended for sequential execution)
 batch! {
@@ -77,12 +77,12 @@ batch! {
     ]
 }
 
-/// All aggregation strategies available:
-/// - `-> all` (default): Returns Vec<T>
-/// - `-> last`: Returns T (last result)
-/// - `-> first`: Returns T (first result)  
-/// - `-> unit`: Returns () (ignores results)
-/// - `-> merge`: Returns T (merged result, requires Default + Clone)
+// All aggregation strategies available:
+// - `-> all` (default): Returns Vec<T>
+// - `-> last`: Returns T (last result)
+// - `-> first`: Returns T (first result)
+// - `-> unit`: Returns () (ignores results)
+// - `-> merge`: Returns T (merged result, requires Default + Clone)
 
 // Example: Different strategies with same operations
 batch! {

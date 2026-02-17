@@ -169,8 +169,9 @@ mod tests {
         }
     }
     
+    // TEST033: Wrap a fast op in TimeBoundWrapper and confirm it completes before the timeout
     #[tokio::test]
-    async fn test_timeout_wrapper_success() {
+    async fn test_033_timeout_wrapper_success() {
         let mut dry = DryContext::new();
         let mut wet = WetContext::new();
         
@@ -197,8 +198,9 @@ mod tests {
         }
     }
     
+    // TEST034: Wrap a slow op in TimeBoundWrapper with a short timeout and verify a Timeout error is returned
     #[tokio::test]
-    async fn test_timeout_wrapper_timeout() {
+    async fn test_034_timeout_wrapper_timeout() {
         let mut dry = DryContext::new();
         let mut wet = WetContext::new();
         
@@ -229,8 +231,9 @@ mod tests {
         }
     }
     
+    // TEST035: Create a named TimeBoundWrapper and verify the op succeeds and returns the expected value
     #[tokio::test]
-    async fn test_timeout_wrapper_with_name() {
+    async fn test_035_timeout_wrapper_with_name() {
         let mut dry = DryContext::new();
         let mut wet = WetContext::new();
         
@@ -260,8 +263,9 @@ mod tests {
         }
     }
     
+    // TEST036: Use create_timeout_wrapper_with_caller_name helper and verify the op result is returned
     #[tokio::test]
-    async fn test_caller_name_wrapper() {
+    async fn test_036_caller_name_wrapper() {
         let mut dry = DryContext::new();
         let mut wet = WetContext::new();
         
@@ -287,8 +291,9 @@ mod tests {
         }
     }
     
+    // TEST037: Use create_logged_timeout_wrapper to compose logging and timeout wrappers and verify success
     #[tokio::test]
-    async fn test_logged_timeout_wrapper() {
+    async fn test_037_logged_timeout_wrapper() {
         tracing_subscriber::fmt::try_init().ok();
         let mut dry = DryContext::new();
         let mut wet = WetContext::new();

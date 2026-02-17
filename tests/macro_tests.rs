@@ -6,8 +6,9 @@ use ops::{
 use std::sync::Arc;
 use async_trait::async_trait;
 
+// TEST077: Use dry_put! and dry_get! macros to store and retrieve a typed value by variable name
 #[test]
-fn test_dry_put_and_get() {
+fn test_077_dry_put_and_get() {
     let mut dry = DryContext::new();
     
     let value = 42;
@@ -17,8 +18,9 @@ fn test_dry_put_and_get() {
     assert_eq!(retrieved, Some(42));
 }
 
+// TEST078: Use dry_require! macro to retrieve a required value and verify error when key is missing
 #[test]
-fn test_dry_require() {
+fn test_078_dry_require() {
     let mut dry = DryContext::new();
     
     let name = "test".to_string();
@@ -33,8 +35,9 @@ fn test_dry_require() {
     assert!(missing.is_err());
 }
 
+// TEST079: Use dry_result! macro to store a final result and verify it is stored under both "result" and op name
 #[test]
-fn test_dry_result() {
+fn test_079_dry_result() {
     let mut dry = DryContext::new();
     
     let final_value = "completed".to_string();
@@ -52,8 +55,9 @@ struct TestService {
     value: i32,
 }
 
+// TEST080: Use wet_put_ref! and wet_require_ref! macros to store and retrieve a service reference
 #[test]
-fn test_wet_put_ref_and_require_ref() {
+fn test_080_wet_put_ref_and_require_ref() {
     let mut wet = WetContext::new();
     
     let service = TestService { value: 100 };
@@ -64,8 +68,9 @@ fn test_wet_put_ref_and_require_ref() {
     assert_eq!(retrieved.unwrap().value, 100);
 }
 
+// TEST081: Use wet_put_arc! to store an Arc-wrapped service and retrieve it via wet_require_ref!
 #[test]
-fn test_wet_put_arc() {
+fn test_081_wet_put_arc() {
     let mut wet = WetContext::new();
     
     let shared_service = Arc::new(TestService { value: 200 });
@@ -99,8 +104,9 @@ impl Op<String> for MacroTestOp {
     }
 }
 
+// TEST082: Run a full op that uses dry_require! and wet_require_ref! macros internally and verify the output
 #[tokio::test]
-async fn test_macros_in_op() {
+async fn test_082_macros_in_op() {
     // Prepare contexts
     let mut dry = DryContext::new();
     let input = "test".to_string();

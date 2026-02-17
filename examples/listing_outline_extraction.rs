@@ -5,12 +5,12 @@ use serde_json::json;
 // Mock structured query op for table of contents extraction
 #[derive(Debug)]
 struct ListingOutlineExtractionOp {
-    mock_data: bool,
+    _mock_data: bool,
 }
 
 impl ListingOutlineExtractionOp {
     fn new() -> Self {
-        Self { mock_data: true }
+        Self { _mock_data: true }
     }
 }
 
@@ -263,6 +263,7 @@ fn print_entry(entry: &OutlineEntry, depth: usize) {
 
 // Storage op to bridge between different return types
 #[derive(Debug)]
+#[allow(dead_code)]
 struct StoreOutlineOp;
 
 #[async_trait]

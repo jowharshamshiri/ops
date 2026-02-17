@@ -19,7 +19,7 @@ struct ScanDirectoryOp;
 
 #[async_trait]
 impl Op<()> for ValidateFolderPathOp {
-    async fn perform(&self, dry: &mut DryContext, wet: &mut WetContext) -> OpResult<()> {
+    async fn perform(&self, _dry: &mut DryContext, wet: &mut WetContext) -> OpResult<()> {
         println!("ValidateFolderPathOp: Checking for filesystem_service...");
         
         // Check if reference exists
@@ -45,7 +45,7 @@ impl Op<()> for ValidateFolderPathOp {
 
 #[async_trait]
 impl Op<Vec<String>> for ScanDirectoryOp {
-    async fn perform(&self, dry: &mut DryContext, wet: &mut WetContext) -> OpResult<Vec<String>> {
+    async fn perform(&self, _dry: &mut DryContext, wet: &mut WetContext) -> OpResult<Vec<String>> {
         println!("ScanDirectoryOp: Checking for filesystem_service...");
         
         // Check if reference exists

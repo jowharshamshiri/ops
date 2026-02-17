@@ -92,8 +92,9 @@ mod tests {
         }
     }
 
+    // TEST005: Confirm the perform() utility wraps an op with automatic logging and returns its result
     #[tokio::test]
-    async fn test_perform_with_auto_logging() {
+    async fn test_005_perform_with_auto_logging() {
         let mut dry = DryContext::new();
         let mut wet = WetContext::new();
         
@@ -104,15 +105,17 @@ mod tests {
         assert_eq!(result.unwrap(), 42);
     }
 
+    // TEST006: Verify get_caller_trigger_name() returns a string containing the module path with "::"
     #[test] 
-    fn test_caller_trigger_name() {
+    fn test_006_caller_trigger_name() {
         let name = get_caller_trigger_name();
         assert!(name.contains("ops"));
         assert!(name.contains("::"));
     }
 
+    // TEST007: Confirm wrap_nested_op_exception wraps an error with the op name in the message
     #[test]
-    fn test_wrap_nested_op_exception() {
+    fn test_007_wrap_nested_op_exception() {
         let original_error = OpError::ExecutionFailed("original error".to_string());
         let wrapped = wrap_nested_op_exception("TestOp", original_error);
         
@@ -125,8 +128,9 @@ mod tests {
         }
     }
 
+    // TEST008: Verify wrap_runtime_exception converts a boxed std error into an OpError::ExecutionFailed
     #[test]
-    fn test_wrap_runtime_exception() {
+    fn test_008_wrap_runtime_exception() {
         let error = Box::new(std::io::Error::new(std::io::ErrorKind::Other, "test error"));
         let wrapped = wrap_runtime_exception(error);
         

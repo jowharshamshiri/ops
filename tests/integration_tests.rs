@@ -34,8 +34,9 @@ impl Op<String> for FailingOp {
     }
 }
 
+// TEST083: Compose timeout and logging wrappers around a failing op and verify the error message includes the op name
 #[tokio::test]
-async fn test_error_handling_and_wrapper_chains() {
+async fn test_083_error_handling_and_wrapper_chains() {
     tracing_subscriber::fmt::try_init().ok();
     let mut dry = DryContext::new();
     let mut wet = WetContext::new();
@@ -59,15 +60,17 @@ async fn test_error_handling_and_wrapper_chains() {
     }
 }
 
+// TEST084: Call get_caller_trigger_name from within a test and verify it reflects the integration test module path
 #[tokio::test]
-async fn test_stack_trace_analysis() {
+async fn test_084_stack_trace_analysis() {
     let trigger_name = get_caller_trigger_name();
     assert!(trigger_name.contains("integration_tests"));
     assert!(trigger_name.contains("::"));
 }
 
+// TEST085: Use wrap_nested_op_exception and verify the wrapped error contains both op name and original message
 #[tokio::test]
-async fn test_exception_wrapping_utilities() {
+async fn test_085_exception_wrapping_utilities() {
     let original_error = OpError::ExecutionFailed("original".to_string());
     let wrapped = wrap_nested_op_exception("TestOp", original_error);
     
@@ -96,8 +99,9 @@ impl Op<String> for SlowOp {
     }
 }
 
+// TEST086: Wrap a slow op in a short-timeout TimeBoundWrapper and verify the error is wrapped with logging context
 #[tokio::test]
-async fn test_timeout_wrapper_functionality() {
+async fn test_086_timeout_wrapper_functionality() {
     tracing_subscriber::fmt::try_init().ok();
     let mut dry = DryContext::new();
     let mut wet = WetContext::new();
@@ -153,8 +157,9 @@ impl Op<Config> for ConfigOp {
     }
 }
 
+// TEST087: Run an op that retrieves a service from WetContext and reads config values from it
 #[tokio::test]
-async fn test_dry_and_wet_context_usage() {
+async fn test_087_dry_and_wet_context_usage() {
     let mut dry = DryContext::new();
     dry.insert("service", "user_service");
     dry.insert("version", "1.0");
@@ -195,8 +200,9 @@ impl Op<User> for UserOp {
     }
 }
 
+// TEST088: Run a BatchOp with two identical user-building ops and verify both produce the expected User struct
 #[tokio::test]
-async fn test_batch_ops() {
+async fn test_088_batch_ops() {
     let mut dry = DryContext::new()
         .with_value("user_id", 1u32)
         .with_value("name", "John Doe")
@@ -219,8 +225,9 @@ async fn test_batch_ops() {
     }
 }
 
+// TEST089: Compose TimeBoundWrapper and LoggingWrapper around a simple op and verify the result passes through
 #[tokio::test]
-async fn test_wrapper_composition() {
+async fn test_089_wrapper_composition() {
     let mut dry = DryContext::new();
     let mut wet = WetContext::new();
     
@@ -247,8 +254,9 @@ async fn test_wrapper_composition() {
     assert_eq!(result, "success");
 }
 
+// TEST090: Use the perform() utility function directly and verify it returns the op result with auto-logging
 #[tokio::test]
-async fn test_perform_utility() {
+async fn test_090_perform_utility() {
     let mut dry = DryContext::new();
     let mut wet = WetContext::new();
     

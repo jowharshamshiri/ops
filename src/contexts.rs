@@ -252,8 +252,9 @@ impl WetContext {
 mod tests {
     use super::*;
 
+    // TEST009: Insert typed values into DryContext and verify get/contains work correctly
     #[test]
-    fn test_dry_context_basic_operations() {
+    fn test_009_dry_context_basic_operations() {
         let mut ctx = DryContext::new();
         ctx.insert("name", "test");
         ctx.insert("count", 42);
@@ -264,8 +265,9 @@ mod tests {
         assert!(!ctx.contains("missing"));
     }
 
+    // TEST010: Build a DryContext with chained with_value calls and verify all values are stored
     #[test]
-    fn test_dry_context_builder() {
+    fn test_010_dry_context_builder() {
         let ctx = DryContext::new()
             .with_value("key1", "value1")
             .with_value("key2", 123);
@@ -274,8 +276,9 @@ mod tests {
         assert_eq!(ctx.get::<i32>("key2").unwrap(), 123);
     }
 
+    // TEST011: Insert a reference into WetContext and retrieve it by type via get_ref
     #[test]
-    fn test_wet_context_basic_operations() {
+    fn test_011_wet_context_basic_operations() {
         #[derive(Debug)]
         struct TestService {
             name: String,
@@ -291,8 +294,9 @@ mod tests {
         assert_eq!(retrieved.name, "test");
     }
 
+    // TEST012: Build a WetContext with chained with_ref calls and verify contains for each key
     #[test]
-    fn test_wet_context_builder() {
+    fn test_012_wet_context_builder() {
         struct Service1;
         struct Service2;
 
@@ -304,16 +308,18 @@ mod tests {
         assert!(ctx.contains("service2"));
     }
 
+    // TEST013: Confirm get_required succeeds for present keys and returns an error for missing keys
     #[test]
-    fn test_required_values() {
+    fn test_013_required_values() {
         let ctx = DryContext::new().with_value("exists", 42);
 
         assert_eq!(ctx.get_required::<i32>("exists").unwrap(), 42);
         assert!(ctx.get_required::<i32>("missing").is_err());
     }
 
+    // TEST014: Merge two DryContexts and verify values from both are accessible in the target
     #[test]
-    fn test_context_merge() {
+    fn test_014_context_merge() {
         let mut ctx1 = DryContext::new().with_value("a", 1);
         let ctx2 = DryContext::new().with_value("b", 2);
 
@@ -322,8 +328,9 @@ mod tests {
         assert_eq!(ctx1.get::<i32>("b").unwrap(), 2);
     }
 
+    // TEST015: Verify get_required returns a Type mismatch error when the stored type doesn't match
     #[test]
-    fn test_dry_context_type_mismatch_error() {
+    fn test_015_dry_context_type_mismatch_error() {
         let ctx = DryContext::new()
             .with_value("count", "not_a_number")
             .with_value("flag", 123);
@@ -352,8 +359,9 @@ mod tests {
         assert!(!err.contains("Type mismatch"));
     }
 
+    // TEST016: Verify WetContext get_required returns a Type mismatch error when the stored ref type differs
     #[test]
-    fn test_wet_context_type_mismatch_error() {
+    fn test_016_wet_context_type_mismatch_error() {
         #[derive(Debug)]
         struct ServiceA {
             _name: String,
@@ -382,8 +390,9 @@ mod tests {
         assert!(!err.contains("Type mismatch"));
     }
 
+    // TEST017: Set and clear abort flags on DryContext and verify is_aborted and abort_reason reflect state
     #[test]
-    fn test_control_flags() {
+    fn test_017_control_flags() {
         let mut ctx = DryContext::new();
         
         // Test abort functionality
@@ -403,8 +412,9 @@ mod tests {
         assert_eq!(ctx.abort_reason(), None);
     }
 
+    // TEST018: Merge contexts with abort flags and confirm the target inherits the abort state correctly
     #[test]
-    fn test_control_flags_merge() {
+    fn test_018_control_flags_merge() {
         let mut ctx1 = DryContext::new();
         let mut ctx2 = DryContext::new();
         
@@ -429,8 +439,9 @@ mod tests {
         assert_eq!(ctx3.abort_reason(), Some(&"Original abort".to_string()));
     }
 
+    // TEST019: Verify get_or_insert_with inserts when missing and returns existing without calling factory
     #[test]
-    fn test_get_or_insert_with() {
+    fn test_019_get_or_insert_with() {
         let mut ctx = DryContext::new();
         
         // Test inserting a new value when key doesn't exist
@@ -472,8 +483,9 @@ mod tests {
         assert_eq!(stored_config, config);
     }
 
+    // TEST020: Verify get_or_compute_with computes and stores a value using context data and skips recompute if present
     #[test]
-    fn test_get_or_compute_with() {
+    fn test_020_get_or_compute_with() {
         let mut ctx = DryContext::new();
         
         // Seed some initial data

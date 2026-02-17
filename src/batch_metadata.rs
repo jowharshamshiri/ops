@@ -241,8 +241,9 @@ mod tests {
         }
     }
     
+    // TEST047: Build BatchMetadata from producer/consumer ops and verify only external inputs are required
     #[test]
-    fn test_batch_metadata_with_data_flow() {
+    fn test_047_batch_metadata_with_data_flow() {
         let ops: Vec<Arc<dyn Op<String>>> = vec![
             Arc::new(ProducerOp),
             Arc::new(ConsumerOp),
@@ -262,8 +263,9 @@ mod tests {
         }
     }
     
+    // TEST048: Build BatchMetadata from two ops with different reference schemas and verify union of required refs
     #[test]
-    fn test_reference_schema_merging() {
+    fn test_048_reference_schema_merging() {
         struct ServiceAOp;
         struct ServiceBOp;
         

@@ -1,7 +1,6 @@
 use crate::prelude::*;
 use crate::{DryContext, WetContext};
 
-use serde_json::{json, Value};
 use serde_json::Value as JsonValue;
 
 /// Metadata describing an op's requirements and schemas
@@ -273,8 +272,9 @@ mod tests {
     use super::*;
     use serde_json::json;
 
+    // TEST021: Build OpMetadata with name, description, and schemas and verify all fields are populated
     #[test]
-    fn test_metadata_builder() {
+    fn test_021_metadata_builder() {
         let metadata = OpMetadata::builder("TestOp")
             .description("A test operation")
             .input_schema(json!({
@@ -295,8 +295,9 @@ mod tests {
         assert!(metadata.output_schema.is_some());
     }
 
+    // TEST022: Construct a TriggerFuse with data and verify the trigger name and dry context values
     #[test]
-    fn test_trigger_fuse() {
+    fn test_022_trigger_fuse() {
         let request = TriggerFuse::new("ProcessImage")
             .with_data("image_path", "/tmp/test.jpg")
             .with_data("width", 800);
@@ -309,8 +310,9 @@ mod tests {
         assert_eq!(request.dry_context.get::<i32>("width").unwrap(), 800);
     }
 
+    // TEST023: Validate a DryContext against an input schema and confirm valid/invalid reports
     #[test]
-    fn test_basic_validation() {
+    fn test_023_basic_validation() {
         let metadata = OpMetadata::builder("TestOp")
             .input_schema(json!({
                 "type": "object",

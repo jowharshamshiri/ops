@@ -1,5 +1,5 @@
 use ops::prelude::*;
-use ops::{batch, repeat, repeat_until, op_wrapper, AggregationStrategy};
+use ops::{batch, repeat, repeat_until};
 
 // Example ops for demonstration
 #[derive(Debug)]
@@ -15,7 +15,7 @@ impl ProcessOp {
 
 #[async_trait]
 impl Op<String> for ProcessOp {
-    async fn perform(&self, dry: &mut DryContext, wet: &mut WetContext) -> OpResult<String> {
+    async fn perform(&self, dry: &mut DryContext, _wet: &mut WetContext) -> OpResult<String> {
         let iteration = dry.get::<usize>("iteration").unwrap_or(0);
         let result = format!("{}-{}", self.name, iteration);
         println!("ProcessOp: {}", result);
@@ -32,7 +32,7 @@ struct CheckOp;
 
 #[async_trait]
 impl Op<bool> for CheckOp {
-    async fn perform(&self, dry: &mut DryContext, wet: &mut WetContext) -> OpResult<bool> {
+    async fn perform(&self, dry: &mut DryContext, _wet: &mut WetContext) -> OpResult<bool> {
         let iteration = dry.get::<usize>("iteration").unwrap_or(0);
         let should_continue = iteration < 3; // Stop after 3 iterations
         dry.insert("should_continue", should_continue);

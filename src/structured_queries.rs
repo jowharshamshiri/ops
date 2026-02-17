@@ -298,8 +298,9 @@ pub fn generate_outline_schema() -> serde_json::Value {
 mod tests {
     use super::*;
 
+    // TEST024: Build a flat ListingOutline with depth-0 entries and verify max_depth, levels, and flatten count
     #[test]
-    fn test_simple_flat_outline() {
+    fn test_024_simple_flat_outline() {
         let mut outline = ListingOutline::new();
         outline.entries = vec![
             OutlineEntry::new("Introduction".to_string(), Some("1".to_string()), 0),
@@ -313,8 +314,9 @@ mod tests {
         assert_eq!(outline.flatten().len(), 4);
     }
 
+    // TEST025: Build a two-level outline with chapters and sections and verify depth, level counts, and flatten
     #[test]
-    fn test_hierarchical_outline() {
+    fn test_025_hierarchical_outline() {
         let mut outline = ListingOutline::new();
         
         let mut chapter1 = OutlineEntry::new("Chapter 1: Basics".to_string(), Some("10".to_string()), 0)
@@ -334,8 +336,9 @@ mod tests {
         assert_eq!(outline.flatten().len(), 5); // 2 chapters + 3 sections
     }
 
+    // TEST026: Build a three-level part/chapter/section outline and verify depth and per-level entry counts
     #[test]
-    fn test_complex_part_based_outline() {
+    fn test_026_complex_part_based_outline() {
         let mut outline = ListingOutline::new();
         
         // Part I with chapters
@@ -366,8 +369,9 @@ mod tests {
         assert_eq!(outline.flatten().len(), 6); // 2 parts + 2 chapters + 2 sections
     }
 
+    // TEST027: Flatten a nested outline and verify each entry's path reflects its ancestry correctly
     #[test]
-    fn test_flatten_preserves_hierarchy() {
+    fn test_027_flatten_preserves_hierarchy() {
         let mut outline = ListingOutline::new();
         
         let mut part = OutlineEntry::new("Part I".to_string(), Some("1".to_string()), 0);
@@ -385,8 +389,9 @@ mod tests {
         assert_eq!(flat[2].path, vec!["Part I", "Chapter 1", "Section 1.1"]);
     }
 
+    // TEST028: Call generate_outline_schema and verify the returned JSON contains all required definitions
     #[test]
-    fn test_schema_generation() {
+    fn test_028_schema_generation() {
         let schema = generate_outline_schema();
         assert!(schema.is_object());
         assert!(schema["properties"]["entries"].is_object());

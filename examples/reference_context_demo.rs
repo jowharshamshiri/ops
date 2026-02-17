@@ -1,5 +1,4 @@
-use ops::{WetContext, wet_put_ref, wet_get_ref, wet_require_ref, wet_put_arc};
-use std::sync::Arc;
+use ops::{wet_put_ref, wet_get_ref, wet_require_ref, wet_put_arc};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("=== Reference Context Demo ===");
@@ -24,12 +23,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     #[derive(Debug, Clone)]
     struct ComputationResult {
         matrix: Vec<Vec<f64>>,
-        computation_time_ms: u64,
+        _computation_time_ms: u64,
     }
     
     let expensive_result = ComputationResult {
         matrix: vec![vec![1.0, 2.0, 3.0]; 100], // 100x3 matrix
-        computation_time_ms: 5000, // Pretend this took 5 seconds
+        _computation_time_ms: 5000, // Pretend this took 5 seconds
     };
     
     // Store without needing Serialize

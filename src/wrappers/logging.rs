@@ -149,8 +149,9 @@ mod tests {
         }
     }
     
+    // TEST029: Wrap a successful op in LoggingWrapper and verify it passes through the result unchanged
     #[tokio::test]
-    async fn test_logging_wrapper_success() {
+    async fn test_029_logging_wrapper_success() {
         tracing_subscriber::fmt::try_init().ok(); // Initialize tracing for tests
         
         let mut dry = DryContext::new();
@@ -178,8 +179,9 @@ mod tests {
         }
     }
     
+    // TEST030: Wrap a failing op in LoggingWrapper and verify the error includes the op name context
     #[tokio::test]
-    async fn test_logging_wrapper_failure() {
+    async fn test_030_logging_wrapper_failure() {
         tracing_subscriber::fmt::try_init().ok();
         
         let mut dry = DryContext::new();
@@ -212,8 +214,9 @@ mod tests {
         }
     }
     
+    // TEST031: Use create_context_aware_logger helper and verify the wrapped op returns its result
     #[tokio::test]
-    async fn test_context_aware_logger() {
+    async fn test_031_context_aware_logger() {
         let mut dry = DryContext::new();
         let mut wet = WetContext::new();
         
@@ -226,8 +229,9 @@ mod tests {
         assert_eq!(result.unwrap(), "test");
     }
 
+    // TEST032: Verify ANSI color escape code constants have the expected ANSI sequence values
     #[test]
-    fn test_ansi_color_constants() {
+    fn test_032_ansi_color_constants() {
         assert_eq!(YELLOW, "\x1b[33m");
         assert_eq!(GREEN, "\x1b[32m");
         assert_eq!(RED, "\x1b[31m");

@@ -209,8 +209,9 @@ mod tests {
         }
     }
 
+    // TEST067: Run a LoopOp for 3 iterations with 2 ops each and verify all 6 results in order
     #[tokio::test]
-    async fn test_loop_op_basic() {
+    async fn test_067_loop_op_basic() {
         let mut dry = DryContext::new();
         let mut wet = WetContext::new();
         
@@ -227,8 +228,9 @@ mod tests {
         assert_eq!(results, vec![10, 20, 10, 20, 10, 20]);
     }
 
+    // TEST068: Run a LoopOp where each op reads the loop counter and verify values are 0, 1, 2
     #[tokio::test]
-    async fn test_loop_op_with_counter_access() {
+    async fn test_068_loop_op_with_counter_access() {
         let mut dry = DryContext::new();
         let mut wet = WetContext::new();
         
@@ -243,8 +245,9 @@ mod tests {
         assert_eq!(results, vec![0, 1, 2]);
     }
 
+    // TEST069: Start a LoopOp with a pre-initialized counter and verify it only executes the remaining iterations
     #[tokio::test]
-    async fn test_loop_op_existing_counter() {
+    async fn test_069_loop_op_existing_counter() {
         let mut dry = DryContext::new().with_value("my_counter", 2_usize);
         let mut wet = WetContext::new();
         
@@ -260,8 +263,9 @@ mod tests {
         assert_eq!(results, vec![42, 42]);
     }
 
+    // TEST070: Run a LoopOp with a zero iteration limit and verify no ops are executed
     #[tokio::test]
-    async fn test_loop_op_zero_limit() {
+    async fn test_070_loop_op_zero_limit() {
         let mut dry = DryContext::new();
         let mut wet = WetContext::new();
         
@@ -276,8 +280,9 @@ mod tests {
         assert_eq!(results.len(), 0);
     }
 
+    // TEST071: Build a LoopOp with add_op chaining and verify all added ops run across all iterations
     #[tokio::test]
-    async fn test_loop_op_builder_pattern() {
+    async fn test_071_loop_op_builder_pattern() {
         let mut dry = DryContext::new();
         let mut wet = WetContext::new();
         
@@ -291,8 +296,9 @@ mod tests {
         assert_eq!(results, vec![1, 2, 1, 2]);
     }
 
+    // TEST072: Run a LoopOp where the third op fails and verify succeeded ops are rolled back in reverse order
     #[tokio::test]
-    async fn test_loop_op_rollback_on_iteration_failure() {
+    async fn test_072_loop_op_rollback_on_iteration_failure() {
         use std::sync::{Arc, Mutex};
         
         struct RollbackTrackingOp {
@@ -365,8 +371,9 @@ mod tests {
         assert_eq!(*rolled_back_calls, vec![2, 1], "Should have rolled back ops 2, 1 in reverse order (op 3 failed so no rollback)");
     }
 
+    // TEST073: Run a LoopOp where the last op fails and verify rollback occurs in LIFO order within the iteration
     #[tokio::test]
-    async fn test_loop_op_rollback_order_within_iteration() {
+    async fn test_073_loop_op_rollback_order_within_iteration() {
         use std::sync::{Arc, Mutex};
         
         struct OrderTrackingOp {
@@ -434,8 +441,9 @@ mod tests {
         assert_eq!(*order, vec![3, 2, 1], "Rollback should happen in reverse order within iteration");
     }
 
+    // TEST074: Run a LoopOp that fails on iteration 2 and verify previously completed iterations are not rolled back
     #[tokio::test]
-    async fn test_loop_op_successful_iterations_not_rolled_back() {
+    async fn test_074_loop_op_successful_iterations_not_rolled_back() {
         use std::sync::{Arc, Mutex};
         
         struct IterationTrackingOp {
@@ -501,8 +509,9 @@ mod tests {
         assert_eq!(*rolled_back, Vec::<usize>::new(), "No rollback should happen - the failing op wasn't successfully performed");
     }
 
+    // TEST075: Run a LoopOp where op2 fails on iteration 1 and verify only op1 from that iteration is rolled back
     #[tokio::test]
-    async fn test_loop_op_mixed_iteration_with_rollback() {
+    async fn test_075_loop_op_mixed_iteration_with_rollback() {
         use std::sync::{Arc, Mutex};
         
         struct MixedIterationOp {
@@ -577,8 +586,9 @@ mod tests {
         assert_eq!(*rolled_back, vec![(1, 1)], "Should only rollback op1 from failed iteration 1");
     }
 
+    // TEST076: Run a LoopOp configured to continue on error and verify subsequent iterations still execute
     #[tokio::test]
-    async fn test_loop_op_continue_on_error() {
+    async fn test_076_loop_op_continue_on_error() {
         use std::sync::{Arc, Mutex};
         
         struct ContinueOnErrorOp {

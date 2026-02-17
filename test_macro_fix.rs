@@ -60,8 +60,9 @@ mod tests {
     use super::*;
     use tokio;
 
+    // TEST091: Use the op! macro to generate a thumbnail op and verify it processes the file and updates context
     #[tokio::test]
-    async fn test_generate_thumbnail_macro() {
+    async fn test_091_generate_thumbnail_macro() {
         let mut ctx = OpContext::new();
         ctx.put("file_path", "document.pdf".to_string());
         
@@ -79,8 +80,9 @@ mod tests {
         assert_eq!(thumbnail, Some("document_thumb.jpg".to_string()));
     }
 
+    // TEST092: Use the op! macro to generate a file processing op and verify context updates and result string
     #[tokio::test]
-    async fn test_process_file_macro() {
+    async fn test_092_process_file_macro() {
         let mut ctx = OpContext::new();
         ctx.put("file_path", "important.txt".to_string());
         ctx.put("priority", 8i32);

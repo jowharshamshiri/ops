@@ -10,10 +10,10 @@ struct FetchUserOp;
 impl Op<()> for FetchUserOp {
     async fn perform(&self, dry: &mut DryContext, _wet: &mut WetContext) -> OpResult<()> {
         let user_id = dry.get_required::<i32>("user_id")?;
-        
+
         // Simulate fetching user data
-        dry.insert("username", format!("user_{}"));
-        dry.insert("email", format!("user_{}@example.com"));
+        dry.insert("username", format!("user_{}", user_id));
+        dry.insert("email", format!("user_{}@example.com", user_id));
         dry.insert("age", 25);
         
         Ok(())
@@ -106,7 +106,7 @@ impl Op<String> for CreateReportOp {
             }).to_string(),
             "text" => format!(
                 "User Report\n===========\nID: {}\nUsername: {}\nValid: {}\nChecked: {}",
-                username, is_valid, timestamp
+                user_id, username, is_valid, timestamp
             ),
             _ => return Err(OpError::ExecutionFailed("Unknown report format".to_string()))
         };

@@ -227,8 +227,9 @@ mod tests {
         }
     }
 
+    // TEST038: Run ValidatingWrapper with a valid input and verify the op executes and returns the result
     #[tokio::test]
-    async fn test_valid_input_output() {
+    async fn test_038_valid_input_output() {
         let validator = ValidatingWrapper::new(Box::new(ValidatedOp));
         
         let mut dry = DryContext::new();
@@ -240,8 +241,9 @@ mod tests {
         assert_eq!(result.unwrap().value, 42);
     }
 
+    // TEST039: Run ValidatingWrapper without a required input field and verify a Context validation error
     #[tokio::test]
-    async fn test_invalid_input_missing_required() {
+    async fn test_039_invalid_input_missing_required() {
         let validator = ValidatingWrapper::new(Box::new(ValidatedOp));
         
         let mut dry = DryContext::new();
@@ -257,8 +259,9 @@ mod tests {
         }
     }
 
+    // TEST040: Run ValidatingWrapper with an input exceeding the schema maximum and verify a validation error
     #[tokio::test]
-    async fn test_invalid_input_out_of_range() {
+    async fn test_040_invalid_input_out_of_range() {
         let validator = ValidatingWrapper::new(Box::new(ValidatedOp));
         
         let mut dry = DryContext::new();
@@ -274,8 +277,9 @@ mod tests {
         }
     }
 
+    // TEST041: Use ValidatingWrapper::input_only and confirm input is validated while output is not
     #[tokio::test]
-    async fn test_input_only_validation() {
+    async fn test_041_input_only_validation() {
         struct NoOutputSchemaOp;
 
         #[async_trait]
@@ -308,8 +312,9 @@ mod tests {
         assert_eq!(result.unwrap(), 42);
     }
 
+    // TEST042: Use ValidatingWrapper::output_only and confirm output is validated while input is not
     #[tokio::test]
-    async fn test_output_only_validation() {
+    async fn test_042_output_only_validation() {
         struct NoInputSchemaOp;
 
         #[async_trait]
@@ -341,8 +346,9 @@ mod tests {
         assert_eq!(result.unwrap().value, 99);
     }
 
+    // TEST043: Wrap an op with no schemas in ValidatingWrapper and confirm it still succeeds
     #[tokio::test]
-    async fn test_no_schema_validation() {
+    async fn test_043_no_schema_validation() {
         struct NoSchemaOp;
 
         #[async_trait]
@@ -367,8 +373,9 @@ mod tests {
         assert_eq!(result.unwrap(), 123);
     }
 
+    // TEST044: Verify ValidatingWrapper::metadata() delegates to the inner op's metadata unchanged
     #[tokio::test]
-    async fn test_metadata_transparency() {
+    async fn test_044_metadata_transparency() {
         let validator = ValidatingWrapper::new(Box::new(ValidatedOp));
         let metadata = validator.metadata();
         
@@ -378,8 +385,9 @@ mod tests {
         assert!(metadata.output_schema.is_some());
     }
 
+    // TEST045: Verify ValidatingWrapper checks reference_schema and rejects when required refs are missing
     #[tokio::test]
-    async fn test_reference_validation() {
+    async fn test_045_reference_validation() {
         struct ServiceRequiringOp;
 
         #[async_trait]
@@ -434,8 +442,9 @@ mod tests {
         assert_eq!(result.unwrap(), "Used service: postgresql");
     }
 
+    // TEST046: Wrap an op with no reference schema in ValidatingWrapper and confirm it succeeds
     #[tokio::test]
-    async fn test_no_reference_schema() {
+    async fn test_046_no_reference_schema() {
         struct NoRefSchemaOp;
 
         #[async_trait]

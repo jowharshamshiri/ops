@@ -1,5 +1,5 @@
 use ops::prelude::*;
-use ops::{repeat_until, break_loop, continue_loop};
+use ops::{repeat_until, break_loop};
 
 // Your ContentSelectionOp with intelligent break/continue logic
 

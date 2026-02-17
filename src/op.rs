@@ -39,8 +39,9 @@ mod tests {
         }
     }
     
+    // TEST001: Run Op::perform and verify the returned value matches what the op was configured with
     #[tokio::test]
-    async fn test_op_execution() {
+    async fn test_001_op_execution() {
         let op = TestOp { value: 42 };
         let mut dry = DryContext::new();
         let mut wet = WetContext::new();
@@ -49,8 +50,9 @@ mod tests {
         assert_eq!(result.unwrap(), 42);
     }
     
+    // TEST002: Verify Op reads from DryContext and produces a formatted result using that data
     #[tokio::test]
-    async fn test_op_with_contexts() {
+    async fn test_002_op_with_contexts() {
         struct ContextUsingOp;
         
         #[async_trait]
@@ -82,8 +84,9 @@ mod tests {
         assert_eq!(result.unwrap(), "Hello, World!");
     }
     
+    // TEST003: Confirm that the default rollback implementation is a no-op that always succeeds
     #[tokio::test]
-    async fn test_op_default_rollback() {
+    async fn test_003_op_default_rollback() {
         struct SimpleOp;
         
         #[async_trait]
@@ -106,8 +109,9 @@ mod tests {
         assert!(result.is_ok());
     }
     
+    // TEST004: Verify a custom rollback implementation is called and sets the rolled_back flag
     #[tokio::test]
-    async fn test_op_custom_rollback() {
+    async fn test_004_op_custom_rollback() {
         use std::sync::{Arc, Mutex};
         
         struct RollbackTrackingOp {

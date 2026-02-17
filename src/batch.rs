@@ -251,8 +251,9 @@ mod tests {
         }
     }
     
+    // TEST049: Run BatchOp with two succeeding ops and verify results contain both values in order
     #[tokio::test]
-    async fn test_batch_op_success() {
+    async fn test_049_batch_op_success() {
         let ops = vec![
             Arc::new(TestOp { value: 1, should_fail: false }) as Arc<dyn Op<i32>>,
             Arc::new(TestOp { value: 2, should_fail: false }) as Arc<dyn Op<i32>>,
@@ -266,8 +267,9 @@ mod tests {
         assert_eq!(results, vec![1, 2]);
     }
     
+    // TEST050: Run BatchOp where the second op fails and verify the batch returns an error
     #[tokio::test]
-    async fn test_batch_op_failure() {
+    async fn test_050_batch_op_failure() {
         let ops = vec![
             Arc::new(TestOp { value: 1, should_fail: false }) as Arc<dyn Op<i32>>,
             Arc::new(TestOp { value: 2, should_fail: true }) as Arc<dyn Op<i32>>,
@@ -281,8 +283,9 @@ mod tests {
         assert!(result.is_err());
     }
     
+    // TEST051: Run ParallelBatchOp with two ops and verify both result values are present regardless of order
     #[tokio::test]
-    async fn test_parallel_batch_op() {
+    async fn test_051_parallel_batch_op() {
         let ops = vec![
             Arc::new(TestOp { value: 1, should_fail: false }) as Arc<dyn Op<i32>>,
             Arc::new(TestOp { value: 2, should_fail: false }) as Arc<dyn Op<i32>>,
@@ -298,8 +301,9 @@ mod tests {
         assert!(results.contains(&2));
     }
     
+    // TEST052: Verify BatchOp metadata correctly identifies only the externally-required input fields
     #[tokio::test]
-    async fn test_batch_metadata_data_flow() {
+    async fn test_052_batch_metadata_data_flow() {
         // Define ops with data flow dependencies
         struct ProducerOp;
         struct ConsumerOp;
@@ -386,8 +390,9 @@ mod tests {
         }
     }
     
+    // TEST053: Verify BatchOp merges reference schemas from all ops into a unified set of required refs
     #[tokio::test]
-    async fn test_batch_reference_schema_merging() {
+    async fn test_053_batch_reference_schema_merging() {
         struct ServiceAOp;
         struct ServiceBOp;
         
@@ -458,8 +463,9 @@ mod tests {
         }
     }
     
+    // TEST054: Run BatchOp where the third op fails and verify rollback is called on the first two but not the third
     #[tokio::test]
-    async fn test_batch_rollback_on_failure() {
+    async fn test_054_batch_rollback_on_failure() {
         use std::sync::{Arc, Mutex};
         
         struct RollbackTrackingOp {
@@ -538,8 +544,9 @@ mod tests {
         assert!(!*op3_rolled_back.lock().unwrap(), "Op3 should NOT have been rolled back (it failed)");
     }
     
+    // TEST055: Run BatchOp where the last op fails and verify rollback occurs in reverse (LIFO) order
     #[tokio::test]
-    async fn test_batch_rollback_order() {
+    async fn test_055_batch_rollback_order() {
         use std::sync::{Arc, Mutex};
         
         struct OrderTrackingOp {
@@ -607,8 +614,9 @@ mod tests {
         assert_eq!(*order, vec![3, 2, 1], "Rollback should happen in reverse order");
     }
     
+    // TEST056: Run ParallelBatchOp where one op fails and verify rollback is triggered for succeeded ops
     #[tokio::test]
-    async fn test_parallel_batch_rollback() {
+    async fn test_056_parallel_batch_rollback() {
         use std::sync::{Arc, Mutex};
         
         struct RollbackTrackingOp {

@@ -96,6 +96,7 @@ impl Op<String> for AppendSuffixOp {
 }
 
 // Helper function to chain operations by storing results
+#[allow(dead_code)]
 async fn chain_ops<T: Send + Serialize + Clone>(
     mut dry: DryContext,
     wet: &mut WetContext,

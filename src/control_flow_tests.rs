@@ -81,8 +81,9 @@ mod tests {
     use crate::{BatchOp, loop_op::LoopOp};
     use std::sync::Arc;
 
+    // TEST057: Invoke the abort macro without a reason and verify the context is aborted with no reason string
     #[tokio::test]
-    async fn test_abort_macro_without_reason() {
+    async fn test_057_abort_macro_without_reason() {
         let mut dry = DryContext::new();
         let mut wet = WetContext::new();
         
@@ -100,8 +101,9 @@ mod tests {
         }
     }
 
+    // TEST058: Invoke the abort macro with a reason string and verify abort_reason matches
     #[tokio::test]
-    async fn test_abort_macro_with_reason() {
+    async fn test_058_abort_macro_with_reason() {
         let mut dry = DryContext::new();
         let mut wet = WetContext::new();
         
@@ -119,8 +121,9 @@ mod tests {
         }
     }
 
+    // TEST059: Use the continue_loop macro inside an op and verify the scoped continue flag is set in context
     #[tokio::test]
-    async fn test_continue_loop_macro() {
+    async fn test_059_continue_loop_macro() {
         let mut dry = DryContext::new();
         let mut wet = WetContext::new();
         
@@ -139,8 +142,9 @@ mod tests {
         assert_eq!(result.unwrap(), 0); // Default value for i32
     }
 
+    // TEST060: Use check_abort macro to short-circuit when the abort flag is already set in context
     #[tokio::test]
-    async fn test_check_abort_macro() {
+    async fn test_060_check_abort_macro() {
         let mut dry = DryContext::new();
         let mut wet = WetContext::new();
         
@@ -162,8 +166,9 @@ mod tests {
         }
     }
 
+    // TEST061: Run a BatchOp where the second op aborts and verify the batch stops and propagates the abort
     #[tokio::test]
-    async fn test_batch_op_with_abort() {
+    async fn test_061_batch_op_with_abort() {
         let ops = vec![
             Arc::new(AbortTestOp::new(false, None)) as Arc<dyn Op<i32>>,
             Arc::new(AbortTestOp::new(true, Some("Batch abort".to_string()))) as Arc<dyn Op<i32>>,
@@ -184,8 +189,9 @@ mod tests {
         }
     }
 
+    // TEST062: Start a BatchOp with an abort flag already set and verify it immediately returns Aborted
     #[tokio::test]
-    async fn test_batch_op_with_pre_existing_abort() {
+    async fn test_062_batch_op_with_pre_existing_abort() {
         let ops = vec![
             Arc::new(AbortTestOp::new(false, None)) as Arc<dyn Op<i32>>,
             Arc::new(AbortTestOp::new(false, None)) as Arc<dyn Op<i32>>,
@@ -208,8 +214,9 @@ mod tests {
         }
     }
 
+    // TEST063: Run a LoopOp where an op signals continue and verify subsequent ops in the iteration are skipped
     #[tokio::test]
-    async fn test_loop_op_with_continue() {
+    async fn test_063_loop_op_with_continue() {
         let ops: Vec<Arc<dyn Op<i32>>> = vec![
             Arc::new(ContinueTestOp::new(false, 10)), // Should execute
             Arc::new(ContinueTestOp::new(true, 20)),  // Should continue, skip rest
@@ -232,8 +239,9 @@ mod tests {
         assert_eq!(results, vec![10, 0, 10, 0]);
     }
 
+    // TEST064: Run a LoopOp where an op aborts mid-loop and verify the loop terminates with the abort error
     #[tokio::test]
-    async fn test_loop_op_with_abort() {
+    async fn test_064_loop_op_with_abort() {
         let ops: Vec<Arc<dyn Op<i32>>> = vec![
             Arc::new(AbortTestOp::new(false, None)),
             Arc::new(AbortTestOp::new(true, Some("Loop abort".to_string()))),
@@ -254,8 +262,9 @@ mod tests {
         }
     }
 
+    // TEST065: Start a LoopOp with an abort flag already set and verify it immediately returns Aborted
     #[tokio::test]
-    async fn test_loop_op_with_pre_existing_abort() {
+    async fn test_065_loop_op_with_pre_existing_abort() {
         let ops: Vec<Arc<dyn Op<i32>>> = vec![
             Arc::new(AbortTestOp::new(false, None)),
         ];
@@ -277,8 +286,9 @@ mod tests {
         }
     }
 
+    // TEST066: Nest a batch with a continue op inside a loop and verify results across all iterations
     #[tokio::test]
-    async fn test_complex_control_flow_scenario() {
+    async fn test_066_complex_control_flow_scenario() {
         // Test a complex scenario with nested batch and loop operations
         
         // Create a batch with one normal op and one that sets continue

@@ -1,5 +1,5 @@
 use ops::prelude::*;
-use ops::{batch, repeat, repeat_until, op_wrapper};
+use ops::{batch, repeat, repeat_until};
 
 // Mock ops to simulate the user's scenario
 #[derive(Debug)]

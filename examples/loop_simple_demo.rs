@@ -1,6 +1,5 @@
 use ops::prelude::*;
 use ops::repeat;
-use serde_json::json;
 
 // Simple counter op that uses the loop iteration
 struct CounterOp;

@@ -1,6 +1,6 @@
 use ops::prelude::*;
 use ops::{dry_put, dry_put_key, dry_get, dry_get_key, dry_require, dry_require_key, dry_result,
-         wet_put_ref, wet_put_ref_key, wet_put_arc, wet_put_arc_key, 
+         wet_put_arc, wet_put_arc_key,
          wet_get_ref, wet_get_ref_key, wet_require_ref, wet_require_ref_key};
 use std::sync::Arc;
 
@@ -19,12 +19,12 @@ async fn main() -> OpResult<()> {
     let user_id = 123u32;
     
     dry_put!(dry, username);                    // Store variable using its name as key
-    dry_put!(dry, 456u32);            // Store value with variable name as key
+    dry_put!(dry, user_id);           // Store value with variable name as key
     dry_put_key!(dry, "session_id", "sess_789"); // Store with custom key
     
     // Basic dry_get! patterns
     let retrieved_username: Option<String> = dry_get!(dry, username);
-    let retrieved_user_id: Option<u32> = dry_get!(dry);
+    let retrieved_user_id: Option<u32> = dry_get!(dry, user_id);
     let session_id: Option<String> = dry_get_key!(dry, "session_id");
     
     println!("Retrieved username: {:?}", retrieved_username);
