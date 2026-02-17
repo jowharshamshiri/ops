@@ -483,6 +483,85 @@ mod tests {
         assert_eq!(stored_config, config);
     }
 
+    // TEST098: Merge two DryContexts where keys overlap and verify the merging context's values win
+    #[test]
+    fn test_098_dry_context_merge_overwrites_keys() {
+        let mut ctx1 = DryContext::new().with_value("shared", 1i32).with_value("only_in_1", 10i32);
+        let ctx2 = DryContext::new().with_value("shared", 2i32).with_value("only_in_2", 20i32);
+        ctx1.merge(ctx2);
+        // After merge, ctx2's value wins for overlapping keys
+        assert_eq!(ctx1.get::<i32>("shared").unwrap(), 2);
+        assert_eq!(ctx1.get::<i32>("only_in_1").unwrap(), 10);
+        assert_eq!(ctx1.get::<i32>("only_in_2").unwrap(), 20);
+    }
+
+    // TEST099: Merge two WetContexts and verify both sets of references are accessible in the target
+    #[test]
+    fn test_099_wet_context_merge() {
+        struct ServiceA;
+        struct ServiceB;
+
+        let mut ctx1 = WetContext::new();
+        ctx1.insert_ref("a", ServiceA);
+
+        let mut ctx2 = WetContext::new();
+        ctx2.insert_ref("b", ServiceB);
+
+        ctx1.merge(ctx2);
+        assert!(ctx1.contains("a"));
+        assert!(ctx1.contains("b"));
+    }
+
+    // TEST100: Serialize and deserialize a DryContext and verify all values survive the round-trip
+    #[test]
+    fn test_100_dry_context_serde_roundtrip() {
+        let original = DryContext::new()
+            .with_value("name", "alice")
+            .with_value("count", 42i32)
+            .with_value("flag", true);
+
+        let json = serde_json::to_string(&original).expect("serialize failed");
+        let restored: DryContext = serde_json::from_str(&json).expect("deserialize failed");
+
+        assert_eq!(restored.get::<String>("name").unwrap(), "alice");
+        assert_eq!(restored.get::<i32>("count").unwrap(), 42);
+        assert_eq!(restored.get::<bool>("flag").unwrap(), true);
+    }
+
+    // TEST101: Clone a DryContext and verify the clone is independent (mutations don't propagate)
+    #[test]
+    fn test_101_dry_context_clone_is_independent() {
+        let original = DryContext::new().with_value("x", 1i32);
+        let mut cloned = original.clone();
+        cloned.insert("x", 99i32);
+        assert_eq!(original.get::<i32>("x").unwrap(), 1);
+        assert_eq!(cloned.get::<i32>("x").unwrap(), 99);
+    }
+
+    // TEST102: Verify DryContext::keys() returns all inserted keys
+    #[test]
+    fn test_102_dry_context_keys() {
+        let ctx = DryContext::new()
+            .with_value("alpha", 1i32)
+            .with_value("beta", 2i32)
+            .with_value("gamma", 3i32);
+        let mut keys: Vec<_> = ctx.keys().cloned().collect();
+        keys.sort();
+        assert_eq!(keys, vec!["alpha", "beta", "gamma"]);
+    }
+
+    // TEST103: Verify WetContext::keys() returns all inserted reference keys
+    #[test]
+    fn test_103_wet_context_keys() {
+        struct Svc;
+        let mut ctx = WetContext::new();
+        ctx.insert_ref("svc1", Svc);
+        ctx.insert_ref("svc2", Svc);
+        let mut keys: Vec<_> = ctx.keys().cloned().collect();
+        keys.sort();
+        assert_eq!(keys, vec!["svc1", "svc2"]);
+    }
+
     // TEST020: Verify get_or_compute_with computes and stores a value using context data and skips recompute if present
     #[test]
     fn test_020_get_or_compute_with() {

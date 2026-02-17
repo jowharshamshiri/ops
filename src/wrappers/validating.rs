@@ -77,9 +77,8 @@ where
 
     /// Validate references against schema
     fn validate_references_schema(&self, wet: &WetContext, metadata: &OpMetadata) -> OpResult<()> {
-        if !self.validate_input {
-            return Ok(());
-        }
+        // References are always validated when a reference_schema is present —
+        // they are pre-conditions of the op regardless of input/output validation mode.
 
         if let Some(ref schema) = metadata.reference_schema {
             // For reference schema validation, we check that required references exist
@@ -459,13 +458,54 @@ mod tests {
         }
 
         let validator = ValidatingWrapper::new(Box::new(NoRefSchemaOp));
-        
+
         let mut dry = DryContext::new();
         let mut wet = WetContext::new();
-        
+
         // Should succeed even without reference schema
         let result = validator.perform(&mut dry, &mut wet).await;
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), 456);
+    }
+
+    // TEST112: Verify ValidatingWrapper::output_only validates references even when input validation is disabled
+    #[tokio::test]
+    async fn test_112_output_only_still_validates_references() {
+        struct RefRequiringOp;
+
+        #[async_trait]
+        impl Op<i32> for RefRequiringOp {
+            async fn perform(&self, _dry: &mut DryContext, _wet: &mut WetContext) -> OpResult<i32> {
+                Ok(42)
+            }
+            fn metadata(&self) -> OpMetadata {
+                OpMetadata::builder("RefRequiringOp")
+                    .reference_schema(json!({
+                        "type": "object",
+                        "required": ["database"],
+                        "properties": {
+                            "database": { "type": "string" }
+                        }
+                    }))
+                    .build()
+            }
+        }
+
+        let validator = ValidatingWrapper::output_only(Box::new(RefRequiringOp));
+        let mut dry = DryContext::new();
+        let mut wet = WetContext::new();
+
+        // Missing required reference — must be rejected even though input validation is off
+        let result = validator.perform(&mut dry, &mut wet).await;
+        assert!(result.is_err(), "output_only must still validate references");
+        match result.unwrap_err() {
+            OpError::Context(msg) => assert!(msg.contains("database")),
+            e => panic!("expected Context error, got {:?}", e),
+        }
+
+        // With the reference present — must succeed
+        wet.insert_ref("database", "postgres://localhost".to_string());
+        let result = validator.perform(&mut dry, &mut wet).await;
+        assert!(result.is_ok(), "should succeed when required reference is present");
     }
 }

@@ -196,18 +196,6 @@ impl TriggerFuse {
         Ok(self.dry_context.clone())
     }
 
-    pub fn save(&self) -> Result<(), OpError> {
-        // TODO: Implement persistence
-        // For now, this is a placeholder
-        debug!("Saving TriggerFuse: {}", self.id);
-        Ok(())
-    }
-
-    pub fn load(_id: &str) -> Result<Self, OpError> {
-        // TODO: Implement persistence loading
-        // For now, this is a placeholder
-        Err(OpError::Context("TriggerFuse loading not yet implemented".to_string()))
-    }
 }
 
 // Placeholder validation functions - these would use a proper JSON Schema validator

@@ -586,6 +586,98 @@ mod tests {
         assert_eq!(*rolled_back, vec![(1, 1)], "Should only rollback op1 from failed iteration 1");
     }
 
+    struct BreakOp {
+        should_break: bool,
+        value: i32,
+    }
+
+    #[async_trait]
+    impl Op<i32> for BreakOp {
+        async fn perform(&self, dry: &mut DryContext, _wet: &mut WetContext) -> OpResult<i32> {
+            if self.should_break {
+                // Set the scoped break flag — LoopOp reads __break_loop_{loop_id}
+                // We set it via __current_loop_id which LoopOp stores before the loop
+                let loop_id: String = dry.get("__current_loop_id").unwrap_or_default();
+                dry.insert(format!("__break_loop_{}", loop_id), true);
+            }
+            Ok(self.value)
+        }
+        fn metadata(&self) -> OpMetadata { OpMetadata::builder("BreakOp").build() }
+    }
+
+    // TEST113: Run a LoopOp where an op sets the break flag and verify the loop terminates early
+    #[tokio::test]
+    async fn test_113_loop_op_break_terminates_loop() {
+        let ops: Vec<Arc<dyn Op<i32>>> = vec![
+            Arc::new(TestOp { value: 10 }),
+            Arc::new(BreakOp { should_break: true, value: 99 }),
+            Arc::new(TestOp { value: 20 }), // should NOT execute after break
+        ];
+
+        let loop_op = LoopOp::new("counter".to_string(), 5, ops);
+        let mut dry = DryContext::new();
+        let mut wet = WetContext::new();
+
+        let results = loop_op.perform(&mut dry, &mut wet).await.unwrap();
+        // Only two results: TestOp(10) and BreakOp(99) from iteration 0, then loop stops
+        assert_eq!(results, vec![10, 99]);
+    }
+
+    // TEST114: Run LoopOp::with_continue_on_error where an op fails and verify the loop continues
+    #[tokio::test]
+    async fn test_114_loop_op_continue_on_error_skips_failed_iterations() {
+        use std::sync::{Arc as StdArc, Mutex};
+
+        let iterations_seen: StdArc<Mutex<Vec<usize>>> = StdArc::new(Mutex::new(vec![]));
+        let log = iterations_seen.clone();
+
+        struct IterationLogOp {
+            fail_on: Option<usize>,
+            log: StdArc<Mutex<Vec<usize>>>,
+        }
+
+        #[async_trait]
+        impl Op<i32> for IterationLogOp {
+            async fn perform(&self, dry: &mut DryContext, _wet: &mut WetContext) -> OpResult<i32> {
+                let counter: usize = dry.get("it_counter").unwrap_or(0);
+                self.log.lock().unwrap().push(counter);
+                if Some(counter) == self.fail_on {
+                    return Err(OpError::ExecutionFailed(format!("fail on {}", counter)));
+                }
+                Ok(counter as i32)
+            }
+            fn metadata(&self) -> OpMetadata { OpMetadata::builder("IterationLogOp").build() }
+        }
+
+        let loop_op = LoopOp::new(
+            "it_counter".to_string(),
+            4,
+            vec![Arc::new(IterationLogOp { fail_on: Some(1), log: log }) as Arc<dyn Op<i32>>],
+        ).with_continue_on_error(true);
+
+        let mut dry = DryContext::new();
+        let mut wet = WetContext::new();
+        let results = loop_op.perform(&mut dry, &mut wet).await.unwrap();
+
+        let seen = iterations_seen.lock().unwrap().clone();
+        // All 4 iterations were attempted despite failure on iteration 1
+        assert_eq!(seen, vec![0, 1, 2, 3]);
+        // Iteration 1 produced no result (failed), others did
+        assert_eq!(results, vec![0, 2, 3]);
+    }
+
+    // TEST115: Run an empty LoopOp with a non-zero limit and verify it produces no results
+    #[tokio::test]
+    async fn test_115_loop_op_with_no_ops_produces_no_results() {
+        let loop_op: LoopOp<i32> = LoopOp::new("counter".to_string(), 5, vec![]);
+        let mut dry = DryContext::new();
+        let mut wet = WetContext::new();
+        let results = loop_op.perform(&mut dry, &mut wet).await.unwrap();
+        assert!(results.is_empty());
+        // Counter advances to limit
+        assert_eq!(dry.get::<usize>("counter").unwrap(), 5);
+    }
+
     // TEST076: Run a LoopOp configured to continue on error and verify subsequent iterations still execute
     #[tokio::test]
     async fn test_076_loop_op_continue_on_error() {

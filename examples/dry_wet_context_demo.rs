@@ -118,9 +118,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("  Op: {}", trigger_fuse.trigger_name);
     println!("  Created: {}", trigger_fuse.created_at);
     
-    // Simulate saving (not actually implemented)
-    trigger_fuse.save()?;
-    println!("✓ Op request saved (simulated)\n");
+    println!("✓ Op request created (persistence not implemented)\n");
     
     // Later: validate and get dry context
     let loaded_dry = trigger_fuse.validate_and_get_dry_context()?;

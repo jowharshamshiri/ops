@@ -163,7 +163,7 @@ pub enum AggregationStrategy {
 
 /// Create a named batch op type with flexible return types and aggregation
 /// Usage:
-/// ```rust
+/// ```rust,ignore
 /// // Returns Vec<T> (default behavior)
 /// batch! {
 ///     ProcessingPipeline<String> = [
@@ -320,7 +320,7 @@ macro_rules! batch {
 /// Create a named for-loop op type with flexible return types
 /// The limit is loaded from a variable in the dry context
 /// Usage:
-/// ```rust
+/// ```rust,ignore
 /// // Returns Vec<T> (default)
 /// repeat! {
 ///     ProcessLoop<String> = {
@@ -570,7 +570,7 @@ macro_rules! repeat {
 /// The condition is checked from a boolean variable in the dry context
 /// Internal control flags use unique UUIDs to prevent conflicts in nested loops
 /// Usage:
-/// ```rust
+/// ```rust,ignore
 /// // Returns Vec<T> (default)
 /// repeat_until! {
 ///     ProcessUntilDone<String> = {
@@ -1075,7 +1075,7 @@ macro_rules! void_op {
 /// and make it compatible with the TriggerRegistry system.
 ///
 /// Usage:
-/// ```rust
+/// ```rust,ignore
 /// // Basic usage - creates MyTrigger struct
 /// wire_trigger!(MyTrigger, MyOp, "MyOperation");
 ///

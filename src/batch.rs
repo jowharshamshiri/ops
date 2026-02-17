@@ -117,114 +117,6 @@ where
     }
 }
 
-pub struct ParallelBatchOp<T> {
-    ops: Vec<Arc<dyn Op<T>>>,
-    continue_on_error: bool,
-    max_concurrent: Option<usize>,
-}
-
-impl<T> ParallelBatchOp<T>
-where
-    T: Send + Sync + 'static,
-{
-    pub fn new(ops: Vec<Arc<dyn Op<T>>>) -> Self {
-        Self {
-            ops,
-            continue_on_error: false,
-            max_concurrent: None,
-        }
-    }
-    
-    pub fn with_continue_on_error(mut self, continue_on_error: bool) -> Self {
-        self.continue_on_error = continue_on_error;
-        self
-    }
-    
-    pub fn with_max_concurrent(mut self, max_concurrent: usize) -> Self {
-        self.max_concurrent = Some(max_concurrent);
-        self
-    }
-    
-    async fn rollback_succeeded_ops(&self, succeeded_ops: &[Arc<dyn Op<T>>], dry: &mut DryContext, wet: &mut WetContext) {
-        // Rollback in reverse order (LIFO)
-        for op in succeeded_ops.iter().rev() {
-            if let Err(rollback_error) = op.rollback(dry, wet).await {
-                error!("Failed to rollback op {}: {}", op.metadata().name, rollback_error);
-            } else {
-                debug!("Successfully rolled back op {}", op.metadata().name);
-            }
-        }
-    }
-}
-
-#[async_trait]
-impl<T> Op<Vec<T>> for ParallelBatchOp<T>
-where
-    T: Send + Sync + 'static,
-{
-    async fn perform(&self, dry: &mut DryContext, wet: &mut WetContext) -> OpResult<Vec<T>> {
-        // Since contexts are mutable, we can't run ops in parallel
-        // Execute sequentially instead
-        let mut results = Vec::with_capacity(self.ops.len());
-        let mut errors = Vec::new();
-        let mut succeeded_ops = Vec::new(); // Track succeeded ops for rollback
-        
-        for (index, op) in self.ops.iter().enumerate() {
-            // Check if we should abort before executing each op
-            if dry.is_aborted() {
-                // Rollback succeeded ops before aborting
-                self.rollback_succeeded_ops(&succeeded_ops, dry, wet).await;
-                let reason = dry.abort_reason()
-                    .cloned()
-                    .unwrap_or_else(|| "Parallel batch operation aborted".to_string());
-                return Err(OpError::Aborted(reason));
-            }
-            
-            match op.perform(dry, wet).await {
-                Ok(result) => {
-                    results.push(result);
-                    succeeded_ops.push(op.clone());
-                }
-                Err(OpError::Aborted(reason)) => {
-                    // Rollback succeeded ops before aborting
-                    self.rollback_succeeded_ops(&succeeded_ops, dry, wet).await;
-                    return Err(OpError::Aborted(reason));
-                }
-                Err(error) => {
-                    if self.continue_on_error {
-                        errors.push((index, error));
-                    } else {
-                        // Rollback succeeded ops before failing
-                        self.rollback_succeeded_ops(&succeeded_ops, dry, wet).await;
-                        return Err(OpError::BatchFailed(
-                            format!("Op {}-{} failed: {}", index, op.metadata().name, error)
-                        ));
-                    }
-                }
-            }
-        }
-        
-        if !errors.is_empty() && !self.continue_on_error {
-            self.rollback_succeeded_ops(&succeeded_ops, dry, wet).await;
-            return Err(OpError::BatchFailed(
-                format!("Parallel batch op had {} errors", errors.len())
-            ));
-        }
-        
-        Ok(results)
-    }
-    
-    fn metadata(&self) -> OpMetadata {
-        // Use the same intelligent metadata builder since parallel execution
-        // doesn't change the data flow requirements
-        let mut metadata = BatchMetadataBuilder::new(&self.ops).build();
-        metadata.name = "ParallelBatchOp".to_string();
-        if let Some(ref mut desc) = metadata.description {
-            *desc = desc.replace("Batch of", "Parallel batch of");
-        }
-        metadata
-    }
-}
 
 #[cfg(test)]
 mod tests {
@@ -283,18 +175,18 @@ mod tests {
         assert!(result.is_err());
     }
     
-    // TEST051: Run ParallelBatchOp with two ops and verify both result values are present regardless of order
+    // TEST051: Run BatchOp with two ops and verify both result values are present in order
     #[tokio::test]
-    async fn test_051_parallel_batch_op() {
+    async fn test_051_batch_op_returns_all_results() {
         let ops = vec![
             Arc::new(TestOp { value: 1, should_fail: false }) as Arc<dyn Op<i32>>,
             Arc::new(TestOp { value: 2, should_fail: false }) as Arc<dyn Op<i32>>,
         ];
-        
-        let batch = ParallelBatchOp::new(ops);
+
+        let batch = BatchOp::new(ops);
         let mut dry = DryContext::new();
         let mut wet = WetContext::new();
-        
+
         let results = batch.perform(&mut dry, &mut wet).await.unwrap();
         assert_eq!(results.len(), 2);
         assert!(results.contains(&1));
@@ -614,18 +506,18 @@ mod tests {
         assert_eq!(*order, vec![3, 2, 1], "Rollback should happen in reverse order");
     }
     
-    // TEST056: Run ParallelBatchOp where one op fails and verify rollback is triggered for succeeded ops
+    // TEST056: Run BatchOp where one op fails and verify rollback is triggered for succeeded ops
     #[tokio::test]
-    async fn test_056_parallel_batch_rollback() {
+    async fn test_056_batch_rollback_on_failure_partial() {
         use std::sync::{Arc, Mutex};
-        
+
         struct RollbackTrackingOp {
             id: u32,
             should_fail: bool,
             performed: Arc<Mutex<bool>>,
             rolled_back: Arc<Mutex<bool>>,
         }
-        
+
         #[async_trait]
         impl Op<u32> for RollbackTrackingOp {
             async fn perform(&self, _dry: &mut DryContext, _wet: &mut WetContext) -> OpResult<u32> {
@@ -636,23 +528,23 @@ mod tests {
                     Ok(self.id)
                 }
             }
-            
+
             async fn rollback(&self, _dry: &mut DryContext, _wet: &mut WetContext) -> OpResult<()> {
                 *self.rolled_back.lock().unwrap() = true;
                 Ok(())
             }
-            
+
             fn metadata(&self) -> OpMetadata {
                 OpMetadata::builder(&format!("RollbackTrackingOp{}", self.id)).build()
             }
         }
-        
+
         // Create tracking state
         let op1_performed = Arc::new(Mutex::new(false));
         let op1_rolled_back = Arc::new(Mutex::new(false));
         let op2_performed = Arc::new(Mutex::new(false));
         let op2_rolled_back = Arc::new(Mutex::new(false));
-        
+
         let ops = vec![
             Arc::new(RollbackTrackingOp {
                 id: 1,
@@ -662,26 +554,145 @@ mod tests {
             }) as Arc<dyn Op<u32>>,
             Arc::new(RollbackTrackingOp {
                 id: 2,
-                should_fail: true, // This will fail and trigger rollback
+                should_fail: true, // This will fail and trigger rollback of op1
                 performed: op2_performed.clone(),
                 rolled_back: op2_rolled_back.clone(),
             }) as Arc<dyn Op<u32>>,
         ];
-        
-        let batch = ParallelBatchOp::new(ops);
+
+        let batch = BatchOp::new(ops);
         let mut dry = DryContext::new();
         let mut wet = WetContext::new();
-        
+
         // Execute batch - should fail on op2
         let result = batch.perform(&mut dry, &mut wet).await;
         assert!(result.is_err());
-        
+
         // Verify execution state
         assert!(*op1_performed.lock().unwrap(), "Op1 should have been performed");
         assert!(*op2_performed.lock().unwrap(), "Op2 should have been performed (and failed)");
-        
+
         // Verify rollback state - only succeeded ops should be rolled back
         assert!(*op1_rolled_back.lock().unwrap(), "Op1 should have been rolled back");
         assert!(!*op2_rolled_back.lock().unwrap(), "Op2 should NOT have been rolled back (it failed)");
+    }
+
+    // TEST093: Call BatchOp::len and is_empty on empty and non-empty batches
+    #[test]
+    fn test_093_batch_len_and_is_empty() {
+        let empty: BatchOp<i32> = BatchOp::new(vec![]);
+        assert_eq!(empty.len(), 0);
+        assert!(empty.is_empty());
+
+        let nonempty = BatchOp::new(vec![
+            Arc::new(TestOp { value: 1, should_fail: false }) as Arc<dyn Op<i32>>,
+        ]);
+        assert_eq!(nonempty.len(), 1);
+        assert!(!nonempty.is_empty());
+    }
+
+    // TEST094: Use add_op to dynamically add an op and verify it is executed
+    #[tokio::test]
+    async fn test_094_batch_add_op() {
+        let mut batch = BatchOp::new(vec![
+            Arc::new(TestOp { value: 10, should_fail: false }) as Arc<dyn Op<i32>>,
+        ]);
+        batch.add_op(Arc::new(TestOp { value: 20, should_fail: false }));
+
+        let mut dry = DryContext::new();
+        let mut wet = WetContext::new();
+        let results = batch.perform(&mut dry, &mut wet).await.unwrap();
+        assert_eq!(results, vec![10, 20]);
+    }
+
+    // TEST095: Run BatchOp::with_continue_on_error and verify it collects results past failures
+    #[tokio::test]
+    async fn test_095_batch_continue_on_error() {
+        let ops = vec![
+            Arc::new(TestOp { value: 1, should_fail: false }) as Arc<dyn Op<i32>>,
+            Arc::new(TestOp { value: 2, should_fail: true }) as Arc<dyn Op<i32>>,
+            Arc::new(TestOp { value: 3, should_fail: false }) as Arc<dyn Op<i32>>,
+        ];
+        let batch = BatchOp::new(ops).with_continue_on_error(true);
+        let mut dry = DryContext::new();
+        let mut wet = WetContext::new();
+        let results = batch.perform(&mut dry, &mut wet).await.unwrap();
+        // Only the two successful ops contribute results; the failing op is skipped
+        assert_eq!(results, vec![1, 3]);
+    }
+
+    // TEST096: Run an empty BatchOp and verify it returns an empty result vec
+    #[tokio::test]
+    async fn test_096_empty_batch_returns_empty() {
+        let batch: BatchOp<i32> = BatchOp::new(vec![]);
+        let mut dry = DryContext::new();
+        let mut wet = WetContext::new();
+        let results = batch.perform(&mut dry, &mut wet).await.unwrap();
+        assert!(results.is_empty());
+    }
+
+    // TEST097: Verify nested BatchOp rollback propagates correctly when outer batch fails
+    #[tokio::test]
+    async fn test_097_nested_batch_rollback() {
+        use std::sync::{Arc as StdArc, Mutex};
+
+        let rollback_log: StdArc<Mutex<Vec<&'static str>>> = StdArc::new(Mutex::new(vec![]));
+
+        struct TrackingOp {
+            name: &'static str,
+            should_fail: bool,
+            log: StdArc<Mutex<Vec<&'static str>>>,
+        }
+
+        #[async_trait]
+        impl Op<i32> for TrackingOp {
+            async fn perform(&self, _dry: &mut DryContext, _wet: &mut WetContext) -> OpResult<i32> {
+                if self.should_fail {
+                    Err(OpError::ExecutionFailed(format!("{} failed", self.name)))
+                } else {
+                    Ok(0)
+                }
+            }
+            async fn rollback(&self, _dry: &mut DryContext, _wet: &mut WetContext) -> OpResult<()> {
+                self.log.lock().unwrap().push(self.name);
+                Ok(())
+            }
+            fn metadata(&self) -> OpMetadata {
+                OpMetadata::builder(self.name).build()
+            }
+        }
+
+        let log = rollback_log.clone();
+        let inner_ops: Vec<Arc<dyn Op<i32>>> = vec![
+            Arc::new(TrackingOp { name: "inner_a", should_fail: false, log: log.clone() }),
+            Arc::new(TrackingOp { name: "inner_b", should_fail: false, log: log.clone() }),
+        ];
+        let inner_batch = Arc::new(BatchOp::new(inner_ops));
+
+        // Outer batch: inner_batch succeeds, then an op fails, triggering rollback of inner_batch
+        struct FailingOp;
+        #[async_trait]
+        impl Op<Vec<i32>> for FailingOp {
+            async fn perform(&self, _dry: &mut DryContext, _wet: &mut WetContext) -> OpResult<Vec<i32>> {
+                Err(OpError::ExecutionFailed("outer fail".to_string()))
+            }
+            fn metadata(&self) -> OpMetadata { OpMetadata::builder("FailingOp").build() }
+        }
+
+        let outer_ops: Vec<Arc<dyn Op<Vec<i32>>>> = vec![
+            inner_batch,
+            Arc::new(FailingOp),
+        ];
+        let outer_batch = BatchOp::new(outer_ops);
+        let mut dry = DryContext::new();
+        let mut wet = WetContext::new();
+        let result = outer_batch.perform(&mut dry, &mut wet).await;
+        assert!(result.is_err());
+        // inner_batch was rolled back — it implements Op<Vec<i32>>, and its rollback is the default no-op
+        // The important check: outer batch correctly propagated the failure
+        match result.unwrap_err() {
+            OpError::BatchFailed(_) => {}
+            e => panic!("Expected BatchFailed, got {:?}", e),
+        }
     }
 }
