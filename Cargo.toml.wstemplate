@@ -43,4 +43,4 @@ edition = "2021"
 keywords = ["ops", "async", "execution", "framework"]
 license = "MIT"
 name = "ops"
-version = "0.43.47361"
+version = "{{ project.version }}"
