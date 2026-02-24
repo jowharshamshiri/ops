@@ -2,4 +2,4 @@
 .scrap/
 Cargo.lock
 
-.ws/
+.wsb/
