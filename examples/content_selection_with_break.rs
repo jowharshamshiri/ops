@@ -67,21 +67,21 @@ impl Op<()> for InsertDataOp {
 }
 
 #[derive(Debug)]
-struct BitChoiceOp;
+struct MakeDecisionOp;
 
 #[async_trait]
-impl Op<()> for BitChoiceOp {
+impl Op<()> for MakeDecisionOp {
     async fn perform(&self, dry: &mut DryContext, _wet: &mut WetContext) -> OpResult<()> {
         let content_quality = dry.get::<String>("content_quality")
             .unwrap_or_else(|| "unknown".to_string());
         
-        println!(" BitChoice processing quality: {}", content_quality);
+        println!(" MakeDecision processing quality: {}", content_quality);
         
         Ok(())
     }
     
     fn metadata(&self) -> OpMetadata {
-        OpMetadata::builder("BitChoiceOp").build()
+        OpMetadata::builder("MakeDecisionOp").build()
     }
 }
 
@@ -140,7 +140,7 @@ repeat_until! {
         ops: [
             LoadContentOp::new("cso".to_string()),
             InsertDataOp::with("ai_analysis_config"),
-            BitChoiceOp,
+            MakeDecisionOp,
             ReactToContentSelectionResponse
         ]
     }

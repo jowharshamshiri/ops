@@ -33,7 +33,7 @@ batch! {
     ContentSelectionOp<()> -> unit = [
         MockOp::new("LoadContentOp"),
         MockOp::new("InsertDataOp"),
-        MockOp::new("BitChoiceOp"),
+        MockOp::new("MakeDecisionOp"),
         MockOp::new("ReactToContentSelectionResponse")
     ]
 }
@@ -46,7 +46,7 @@ repeat! {
         ops: [
             MockOp::new("LoadContentOp"),
             MockOp::new("InsertDataOp"),
-            MockOp::new("BitChoiceOp"),
+            MockOp::new("MakeDecisionOp"),
             MockOp::new("ReactToContentSelectionResponse")
         ]
     }
@@ -61,7 +61,7 @@ repeat_until! {
         ops: [
             MockOp::new("LoadContentOp"),
             MockOp::new("InsertDataOp"),
-            MockOp::new("BitChoiceOp"),
+            MockOp::new("MakeDecisionOp"),
             MockOp::new("ReactToContentSelectionResponse")
         ]
     }

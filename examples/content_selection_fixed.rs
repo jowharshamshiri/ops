@@ -65,17 +65,17 @@ impl Op<()> for InsertDataOp {
 }
 
 #[derive(Debug)]
-struct BitChoiceOp;
+struct MakeDecisionOp;
 
 #[async_trait]
-impl Op<()> for BitChoiceOp {
+impl Op<()> for MakeDecisionOp {
     async fn perform(&self, _dry: &mut DryContext, _wet: &mut WetContext) -> OpResult<()> {
-        println!("Making bit choice");
+        println!("Making Make Decision");
         Ok(())
     }
     
     fn metadata(&self) -> OpMetadata {
-        OpMetadata::builder("BitChoiceOp").build()
+        OpMetadata::builder("MakeDecisionOp").build()
     }
 }
 
@@ -100,7 +100,7 @@ batch! {
     ContentSelectionOp<()> -> unit = [
         LoadContentOp::new("cso".to_string()),
         InsertDataOp::with("default_config"),
-        BitChoiceOp,
+        MakeDecisionOp,
         ReactToContentSelectionResponse
     ]
 }
@@ -114,7 +114,7 @@ repeat! {
         ops: [
             LoadContentOp::new("cso".to_string()),
             InsertDataOp::with("default_config"),
-            BitChoiceOp,
+            MakeDecisionOp,
             ReactToContentSelectionResponse
         ]
     }
@@ -129,7 +129,7 @@ repeat_until! {
         ops: [
             LoadContentOp::new("cso".to_string()),
             InsertDataOp::with("default_config"),
-            BitChoiceOp,
+            MakeDecisionOp,
             ReactToContentSelectionResponse
         ]
     }
@@ -169,7 +169,7 @@ repeat! {
         limit: "cso_limit", 
         ops: [
             LoadContentOp::new("cso".to_string()),
-            BitChoiceOp
+            MakeDecisionOp
         ]
     }
 }
