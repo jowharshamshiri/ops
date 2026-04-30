@@ -1,5 +1,5 @@
 use crate::{DryContext, OpError, TriggerRegistry, WetContext, Trigger};
-use tracing::{debug, info, trace};
+use tracing::trace;
 
 /// The TriggerEngine manages predicates and runs actions when predicates are met
 pub struct TriggerEngine {
@@ -32,7 +32,6 @@ impl TriggerEngine {
             let name = trigger.predicate().metadata().name.to_string();
             let should = trigger.predicate().perform(dry, wet).await?;
             if should {
-                debug!("[TriggerEngine] Predicate '{}' holds; running {} action(s)", name, trigger.actions().len());
                 for action in &trigger.actions() {
                     // Execute each action op; fail hard on error
                     action.perform(dry, wet).await.map_err(|e| {
@@ -42,7 +41,6 @@ impl TriggerEngine {
                         ))
                     })?;
                 }
-                info!("[TriggerEngine] Completed actions for predicate '{}'", name);
             } else {
                 trace!("[TriggerEngine] Predicate '{}' not triggered", name);
             }

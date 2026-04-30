@@ -1,7 +1,5 @@
 use std::collections::HashMap;
 
-use tracing::info;
-
 use crate::{OpError, OpResult, Trigger};
 
 /// A factory function that creates a Trigger instance
@@ -27,7 +25,6 @@ impl TriggerRegistry {
     {
         let temp_trigger = (factory)();
         let trigger_name = temp_trigger.name();
-        info!("Registered trigger {}", trigger_name);
 		if self.factories.contains_key(&trigger_name) {
 			return Err(OpError::Trigger(format!("Trigger type {} is already registered", trigger_name)));
 		}
