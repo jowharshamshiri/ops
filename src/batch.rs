@@ -143,9 +143,9 @@ mod tests {
         }
     }
     
-    // TEST049: Run BatchOp with two succeeding ops and verify results contain both values in order
+    // TEST0049: Run BatchOp with two succeeding ops and verify results contain both values in order
     #[tokio::test]
-    async fn test_049_batch_op_success() {
+    async fn test0049_batch_op_success() {
         let ops = vec![
             Arc::new(TestOp { value: 1, should_fail: false }) as Arc<dyn Op<i32>>,
             Arc::new(TestOp { value: 2, should_fail: false }) as Arc<dyn Op<i32>>,
@@ -159,9 +159,9 @@ mod tests {
         assert_eq!(results, vec![1, 2]);
     }
     
-    // TEST050: Run BatchOp where the second op fails and verify the batch returns an error
+    // TEST0050: Run BatchOp where the second op fails and verify the batch returns an error
     #[tokio::test]
-    async fn test_050_batch_op_failure() {
+    async fn test0050_batch_op_failure() {
         let ops = vec![
             Arc::new(TestOp { value: 1, should_fail: false }) as Arc<dyn Op<i32>>,
             Arc::new(TestOp { value: 2, should_fail: true }) as Arc<dyn Op<i32>>,
@@ -175,9 +175,9 @@ mod tests {
         assert!(result.is_err());
     }
     
-    // TEST051: Run BatchOp with two ops and verify both result values are present in order
+    // TEST0051: Run BatchOp with two ops and verify both result values are present in order
     #[tokio::test]
-    async fn test_051_batch_op_returns_all_results() {
+    async fn test0051_batch_op_returns_all_results() {
         let ops = vec![
             Arc::new(TestOp { value: 1, should_fail: false }) as Arc<dyn Op<i32>>,
             Arc::new(TestOp { value: 2, should_fail: false }) as Arc<dyn Op<i32>>,
@@ -193,9 +193,9 @@ mod tests {
         assert!(results.contains(&2));
     }
     
-    // TEST052: Verify BatchOp metadata correctly identifies only the externally-required input fields
+    // TEST0052: Verify BatchOp metadata correctly identifies only the externally-required input fields
     #[tokio::test]
-    async fn test_052_batch_metadata_data_flow() {
+    async fn test0052_batch_metadata_data_flow() {
         // Define ops with data flow dependencies
         struct ProducerOp;
         struct ConsumerOp;
@@ -282,9 +282,9 @@ mod tests {
         }
     }
     
-    // TEST053: Verify BatchOp merges reference schemas from all ops into a unified set of required refs
+    // TEST0053: Verify BatchOp merges reference schemas from all ops into a unified set of required refs
     #[tokio::test]
-    async fn test_053_batch_reference_schema_merging() {
+    async fn test0053_batch_reference_schema_merging() {
         struct ServiceAOp;
         struct ServiceBOp;
         
@@ -355,9 +355,9 @@ mod tests {
         }
     }
     
-    // TEST054: Run BatchOp where the third op fails and verify rollback is called on the first two but not the third
+    // TEST0054: Run BatchOp where the third op fails and verify rollback is called on the first two but not the third
     #[tokio::test]
-    async fn test_054_batch_rollback_on_failure() {
+    async fn test0054_batch_rollback_on_failure() {
         use std::sync::{Arc, Mutex};
         
         struct RollbackTrackingOp {
@@ -436,9 +436,9 @@ mod tests {
         assert!(!*op3_rolled_back.lock().unwrap(), "Op3 should NOT have been rolled back (it failed)");
     }
     
-    // TEST055: Run BatchOp where the last op fails and verify rollback occurs in reverse (LIFO) order
+    // TEST0055: Run BatchOp where the last op fails and verify rollback occurs in reverse (LIFO) order
     #[tokio::test]
-    async fn test_055_batch_rollback_order() {
+    async fn test0055_batch_rollback_order() {
         use std::sync::{Arc, Mutex};
         
         struct OrderTrackingOp {
@@ -506,9 +506,9 @@ mod tests {
         assert_eq!(*order, vec![3, 2, 1], "Rollback should happen in reverse order");
     }
     
-    // TEST056: Run BatchOp where one op fails and verify rollback is triggered for succeeded ops
+    // TEST0056: Run BatchOp where one op fails and verify rollback is triggered for succeeded ops
     #[tokio::test]
-    async fn test_056_batch_rollback_on_failure_partial() {
+    async fn test0056_batch_rollback_on_failure_partial() {
         use std::sync::{Arc, Mutex};
 
         struct RollbackTrackingOp {
@@ -577,9 +577,9 @@ mod tests {
         assert!(!*op2_rolled_back.lock().unwrap(), "Op2 should NOT have been rolled back (it failed)");
     }
 
-    // TEST093: Call BatchOp::len and is_empty on empty and non-empty batches
+    // TEST0093: Call BatchOp::len and is_empty on empty and non-empty batches
     #[test]
-    fn test_093_batch_len_and_is_empty() {
+    fn test0093_batch_len_and_is_empty() {
         let empty: BatchOp<i32> = BatchOp::new(vec![]);
         assert_eq!(empty.len(), 0);
         assert!(empty.is_empty());
@@ -591,9 +591,9 @@ mod tests {
         assert!(!nonempty.is_empty());
     }
 
-    // TEST094: Use add_op to dynamically add an op and verify it is executed
+    // TEST0094: Use add_op to dynamically add an op and verify it is executed
     #[tokio::test]
-    async fn test_094_batch_add_op() {
+    async fn test0094_batch_add_op() {
         let mut batch = BatchOp::new(vec![
             Arc::new(TestOp { value: 10, should_fail: false }) as Arc<dyn Op<i32>>,
         ]);
@@ -605,9 +605,9 @@ mod tests {
         assert_eq!(results, vec![10, 20]);
     }
 
-    // TEST095: Run BatchOp::with_continue_on_error and verify it collects results past failures
+    // TEST0095: Run BatchOp::with_continue_on_error and verify it collects results past failures
     #[tokio::test]
-    async fn test_095_batch_continue_on_error() {
+    async fn test0095_batch_continue_on_error() {
         let ops = vec![
             Arc::new(TestOp { value: 1, should_fail: false }) as Arc<dyn Op<i32>>,
             Arc::new(TestOp { value: 2, should_fail: true }) as Arc<dyn Op<i32>>,
@@ -621,9 +621,9 @@ mod tests {
         assert_eq!(results, vec![1, 3]);
     }
 
-    // TEST096: Run an empty BatchOp and verify it returns an empty result vec
+    // TEST0096: Run an empty BatchOp and verify it returns an empty result vec
     #[tokio::test]
-    async fn test_096_empty_batch_returns_empty() {
+    async fn test0096_empty_batch_returns_empty() {
         let batch: BatchOp<i32> = BatchOp::new(vec![]);
         let mut dry = DryContext::new();
         let mut wet = WetContext::new();
@@ -631,9 +631,9 @@ mod tests {
         assert!(results.is_empty());
     }
 
-    // TEST097: Verify nested BatchOp rollback propagates correctly when outer batch fails
+    // TEST0097: Verify nested BatchOp rollback propagates correctly when outer batch fails
     #[tokio::test]
-    async fn test_097_nested_batch_rollback() {
+    async fn test0097_nested_batch_rollback() {
         use std::sync::{Arc as StdArc, Mutex};
 
         let rollback_log: StdArc<Mutex<Vec<&'static str>>> = StdArc::new(Mutex::new(vec![]));

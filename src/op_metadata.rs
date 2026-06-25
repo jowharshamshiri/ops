@@ -260,9 +260,9 @@ mod tests {
     use super::*;
     use serde_json::json;
 
-    // TEST021: Build OpMetadata with name, description, and schemas and verify all fields are populated
+    // TEST0021: Build OpMetadata with name, description, and schemas and verify all fields are populated
     #[test]
-    fn test_021_metadata_builder() {
+    fn test0021_metadata_builder() {
         let metadata = OpMetadata::builder("TestOp")
             .description("A test operation")
             .input_schema(json!({
@@ -283,9 +283,9 @@ mod tests {
         assert!(metadata.output_schema.is_some());
     }
 
-    // TEST022: Construct a TriggerFuse with data and verify the trigger name and dry context values
+    // TEST0022: Construct a TriggerFuse with data and verify the trigger name and dry context values
     #[test]
-    fn test_022_trigger_fuse() {
+    fn test0022_trigger_fuse() {
         let request = TriggerFuse::new("ProcessImage")
             .with_data("image_path", "/tmp/test.jpg")
             .with_data("width", 800);
@@ -298,9 +298,9 @@ mod tests {
         assert_eq!(request.dry_context.get::<i32>("width").unwrap(), 800);
     }
 
-    // TEST023: Validate a DryContext against an input schema and confirm valid/invalid reports
+    // TEST0023: Validate a DryContext against an input schema and confirm valid/invalid reports
     #[test]
-    fn test_023_basic_validation() {
+    fn test0023_basic_validation() {
         let metadata = OpMetadata::builder("TestOp")
             .input_schema(json!({
                 "type": "object",
