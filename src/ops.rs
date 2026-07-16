@@ -50,6 +50,24 @@ pub fn wrap_nested_op_exception(trigger_name: &str, error: OpError) -> OpError {
         OpError::BatchFailed(msg) => {
             OpError::BatchFailed(format!("Batch op '{}' failed: {}", trigger_name, msg))
         },
+        // Classified failures keep their identity through wrapping — the
+        // wrap adds human context to the CHAIN, never touches class/code.
+        OpError::WrappedClassified { chain, code, class, reason } => {
+            OpError::WrappedClassified {
+                chain: format!("Batch op '{}' failed: {}", trigger_name, chain),
+                code,
+                class,
+                reason,
+            }
+        },
+        OpError::Classified { code, class, message } => {
+            OpError::WrappedClassified {
+                chain: format!("Op '{}' failed: {}: {}", trigger_name, code, message),
+                code,
+                class,
+                reason: message,
+            }
+        },
         OpError::Aborted(reason) => {
             // Aborted errors should preserve their nature and not be wrapped as execution failures
             OpError::Aborted(format!("Op '{}' aborted: {}", trigger_name, reason))
@@ -125,6 +143,53 @@ mod tests {
                 assert!(msg.contains("original error"));
             },
             _ => panic!("Expected ExecutionFailed error"),
+        }
+    }
+
+    // TEST1903: wrapping preserves a classified failure's identity — the
+    // wrap enriches the human CHAIN only, never the class/code/reason
+    // (docs/failure-taxonomy.md).
+    #[test]
+    fn test1903_wrap_preserves_classification() {
+        use crate::failure::FailureClass;
+
+        let classified = OpError::Classified {
+            code: "CONTEXT_OVERFLOW".to_string(),
+            class: FailureClass::Input,
+            message: "prompt too large".to_string(),
+        };
+        let wrapped = wrap_nested_op_exception("GenerateOp", classified);
+        match wrapped {
+            OpError::WrappedClassified { chain, code, class, reason } => {
+                assert!(chain.contains("GenerateOp"), "the wrap names the op");
+                assert!(chain.contains("prompt too large"));
+                assert_eq!(code, "CONTEXT_OVERFLOW");
+                assert_eq!(class, FailureClass::Input);
+                assert_eq!(reason, "prompt too large");
+            }
+            other => panic!("expected WrappedClassified, got {:?}", other),
+        }
+
+        // Re-wrapping an already-wrapped classified failure only grows the
+        // chain — the identity fields are untouched.
+        let rewrapped = wrap_nested_op_exception(
+            "OuterBatch",
+            OpError::WrappedClassified {
+                chain: "Op 'GenerateOp' failed: CONTEXT_OVERFLOW: prompt too large".to_string(),
+                code: "CONTEXT_OVERFLOW".to_string(),
+                class: FailureClass::Input,
+                reason: "prompt too large".to_string(),
+            },
+        );
+        match rewrapped {
+            OpError::WrappedClassified { chain, code, class, reason } => {
+                assert!(chain.contains("OuterBatch"));
+                assert!(chain.contains("GenerateOp"));
+                assert_eq!(code, "CONTEXT_OVERFLOW");
+                assert_eq!(class, FailureClass::Input);
+                assert_eq!(reason, "prompt too large");
+            }
+            other => panic!("expected WrappedClassified, got {:?}", other),
         }
     }
 

@@ -1,5 +1,6 @@
 pub mod contexts;
 pub mod error;
+pub mod failure;
 pub mod op;
 pub mod op_metadata;
 pub mod batch;
@@ -16,6 +17,7 @@ mod control_flow_tests;
 
 pub use contexts::{DryContext, WetContext};
 pub use error::OpError;
+pub use failure::FailureClass;
 pub use op::Op;
 pub use op_metadata::{OpMetadata, TriggerFuse, ValidationReport};
 pub use batch::BatchOp;

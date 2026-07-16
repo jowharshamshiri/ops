@@ -93,9 +93,19 @@ where
                     } else {
                         // Rollback succeeded ops before failing
                         self.rollback_succeeded_ops(&succeeded_ops, dry, wet).await;
-                        return Err(OpError::BatchFailed(
-                            format!("Op {}-{} failed: {}", index, op.metadata().name, error)
-                        ));
+                        let chain = format!("Op {}-{} failed: {}", index, op.metadata().name, error);
+                        // A classified child keeps its failure identity —
+                        // the batch adds its wrapping text for humans but
+                        // NEVER flattens the class/code/reason into prose.
+                        return Err(match error.failure_code() {
+                            Some(code) => OpError::WrappedClassified {
+                                chain,
+                                code: code.to_string(),
+                                class: error.failure_class(),
+                                reason: error.failure_reason(),
+                            },
+                            None => OpError::BatchFailed(chain),
+                        });
                     }
                 }
             }

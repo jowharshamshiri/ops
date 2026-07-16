@@ -14,15 +14,74 @@ pub enum OpError {
     
     #[error("Batch op failed: {0}")]
     BatchFailed(String),
+
+    /// A CLASSIFIED failure inside wrapping context (a batch child, a
+    /// trigger-wrapped op, …) — the wrapper preserves the origin's failure
+    /// identity instead of flattening it into prose. `chain` is the wrapping
+    /// text (which op, which index) for humans; class/code/reason are the
+    /// origin's, verbatim.
+    #[error("{chain}")]
+    WrappedClassified {
+        chain: String,
+        code: String,
+        class: crate::failure::FailureClass,
+        reason: String,
+    },
     
     #[error("Op aborted: {0}")]
     Aborted(String),
     
     #[error("Trigger error: {0}")]
     Trigger(String),
+
+    /// A failure carrying its FULL identity from the emit source: the
+    /// machine-readable `code` the origin error declares (`error_code()`),
+    /// the failure CLASS it declares (`failure_class()` — whose problem it
+    /// is), and the leaf human message. Wrapping layers construct this from
+    /// classified origins instead of folding everything into prose; the
+    /// engine's run record and retry policy read it structurally.
+    #[error("{code}: {message}")]
+    Classified {
+        code: String,
+        class: crate::failure::FailureClass,
+        message: String,
+    },
     
     #[error(transparent)]
     Other(#[from] Box<dyn std::error::Error + Send + Sync>),
+}
+
+impl OpError {
+    /// The failure class this error DECLARES. Classified variants carry
+    /// their origin's declaration; everything else is `Internal` —
+    /// unclassified means "ours", never a guess (docs/failure-taxonomy.md).
+    pub fn failure_class(&self) -> crate::failure::FailureClass {
+        match self {
+            Self::Classified { class, .. } => *class,
+            Self::WrappedClassified { class, .. } => *class,
+            _ => crate::failure::FailureClass::Internal,
+        }
+    }
+
+    /// The machine-readable code declared at the emit source, when the
+    /// failure carried one.
+    pub fn failure_code(&self) -> Option<&str> {
+        match self {
+            Self::Classified { code, .. } => Some(code),
+            Self::WrappedClassified { code, .. } => Some(code),
+            _ => None,
+        }
+    }
+
+    /// The LEAF human reason — the origin's own message for classified
+    /// failures, the Display chain otherwise.
+    pub fn failure_reason(&self) -> String {
+        match self {
+            Self::Classified { message, .. } => message.clone(),
+            Self::WrappedClassified { reason, .. } => reason.clone(),
+            other => other.to_string(),
+        }
+    }
 }
 
 impl Clone for OpError {
@@ -32,8 +91,21 @@ impl Clone for OpError {
             Self::Timeout { timeout_ms } => Self::Timeout { timeout_ms: *timeout_ms },
             Self::Context(msg) => Self::Context(msg.clone()),
             Self::BatchFailed(msg) => Self::BatchFailed(msg.clone()),
+            Self::WrappedClassified { chain, code, class, reason } => {
+                Self::WrappedClassified {
+                    chain: chain.clone(),
+                    code: code.clone(),
+                    class: *class,
+                    reason: reason.clone(),
+                }
+            }
             Self::Aborted(msg) => Self::Aborted(msg.clone()),
             Self::Trigger(msg) => Self::Trigger(msg.clone()),
+            Self::Classified { code, class, message } => Self::Classified {
+                code: code.clone(),
+                class: *class,
+                message: message.clone(),
+            },
             Self::Other(boxed_error) => Self::ExecutionFailed(format!("{}", boxed_error)),
         }
     }
@@ -112,6 +184,65 @@ mod tests {
             OpError::ExecutionFailed(msg) => assert!(msg.contains("file missing")),
             _ => panic!("expected ExecutionFailed from cloned Other"),
         }
+    }
+
+    // TEST1901: classified variants carry the emit source's identity through
+    // the accessors; unclassified variants are Internal with no code — the
+    // taxonomy's own rule (docs/failure-taxonomy.md).
+    #[test]
+    fn test1901_classified_accessors() {
+        use crate::failure::FailureClass;
+
+        let classified = OpError::Classified {
+            code: "CONTEXT_OVERFLOW".to_string(),
+            class: FailureClass::Input,
+            message: "prompt too large".to_string(),
+        };
+        assert_eq!(classified.failure_class(), FailureClass::Input);
+        assert_eq!(classified.failure_code(), Some("CONTEXT_OVERFLOW"));
+        assert_eq!(classified.failure_reason(), "prompt too large");
+        assert_eq!(classified.to_string(), "CONTEXT_OVERFLOW: prompt too large");
+
+        let wrapped = OpError::WrappedClassified {
+            chain: "Op 3-generate failed: CONTEXT_OVERFLOW: prompt too large".to_string(),
+            code: "CONTEXT_OVERFLOW".to_string(),
+            class: FailureClass::Input,
+            reason: "prompt too large".to_string(),
+        };
+        assert_eq!(wrapped.failure_class(), FailureClass::Input);
+        assert_eq!(wrapped.failure_code(), Some("CONTEXT_OVERFLOW"));
+        assert_eq!(
+            wrapped.failure_reason(),
+            "prompt too large",
+            "the reason is the LEAF message, not the wrap chain"
+        );
+        assert_eq!(
+            wrapped.to_string(),
+            "Op 3-generate failed: CONTEXT_OVERFLOW: prompt too large",
+            "Display keeps the human chain"
+        );
+
+        let plain = OpError::ExecutionFailed("boom".to_string());
+        assert_eq!(plain.failure_class(), FailureClass::Internal);
+        assert_eq!(plain.failure_code(), None);
+    }
+
+    // TEST1902: cloning a classified error preserves its full identity —
+    // the run-record path clones the terminal error before persisting.
+    #[test]
+    fn test1902_clone_preserves_classification() {
+        use crate::failure::FailureClass;
+
+        let original = OpError::WrappedClassified {
+            chain: "Op 'x' failed: GPU_OUT_OF_MEMORY: no VRAM".to_string(),
+            code: "GPU_OUT_OF_MEMORY".to_string(),
+            class: FailureClass::Resource,
+            reason: "no VRAM".to_string(),
+        };
+        let cloned = original.clone();
+        assert_eq!(cloned.failure_class(), FailureClass::Resource);
+        assert_eq!(cloned.failure_code(), Some("GPU_OUT_OF_MEMORY"));
+        assert_eq!(cloned.failure_reason(), "no VRAM");
     }
 
     // TEST0111: Convert a serde_json::Error into OpError via From impl
