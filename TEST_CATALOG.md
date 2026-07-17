@@ -1,8 +1,8 @@
 # Rust Test Catalog
 
-**Total Tests:** 115
+**Total Tests:** 120
 
-**Numbered Tests:** 115
+**Numbered Tests:** 120
 
 **Unnumbered Tests:** 0
 
@@ -20,10 +20,10 @@ This catalog lists all tests in the Rust codebase.
 | test0002 | `test0002_op_with_contexts` | TEST0002: Verify Op reads from DryContext and produces a formatted result using that data | src/op.rs:55 |
 | test0003 | `test0003_op_default_rollback` | TEST0003: Confirm that the default rollback implementation is a no-op that always succeeds | src/op.rs:89 |
 | test0004 | `test0004_op_custom_rollback` | TEST0004: Verify a custom rollback implementation is called and sets the rolled_back flag | src/op.rs:114 |
-| test0005 | `test0005_perform_with_auto_logging` | TEST0005: Confirm the perform() utility wraps an op with automatic logging and returns its result | src/ops.rs:97 |
-| test0006 | `test0006_caller_trigger_name` | TEST0006: Verify get_caller_trigger_name() returns a string containing the module path with "::" | src/ops.rs:110 |
-| test0007 | `test0007_wrap_nested_op_exception` | TEST0007: Confirm wrap_nested_op_exception wraps an error with the op name in the message | src/ops.rs:118 |
-| test0008 | `test0008_wrap_runtime_exception` | TEST0008: Verify wrap_runtime_exception converts a boxed std error into an OpError::ExecutionFailed | src/ops.rs:133 |
+| test0005 | `test0005_perform_with_auto_logging` | TEST0005: Confirm the perform() utility wraps an op with automatic logging and returns its result | src/ops.rs:115 |
+| test0006 | `test0006_caller_trigger_name` | TEST0006: Verify get_caller_trigger_name() returns a string containing the module path with "::" | src/ops.rs:128 |
+| test0007 | `test0007_wrap_nested_op_exception` | TEST0007: Confirm wrap_nested_op_exception wraps an error with the op name in the message | src/ops.rs:136 |
+| test0008 | `test0008_wrap_runtime_exception` | TEST0008: Verify wrap_runtime_exception converts a boxed std error into an OpError::ExecutionFailed | src/ops.rs:198 |
 | test0009 | `test0009_dry_context_basic_operations` | TEST0009: Insert typed values into DryContext and verify get/contains work correctly | src/contexts.rs:257 |
 | test0010 | `test0010_dry_context_builder` | TEST0010: Build a DryContext with chained with_value calls and verify all values are stored | src/contexts.rs:270 |
 | test0011 | `test0011_wet_context_basic_operations` | TEST0011: Insert a reference into WetContext and retrieve it by type via get_ref | src/contexts.rs:281 |
@@ -64,14 +64,14 @@ This catalog lists all tests in the Rust codebase.
 | test0046 | `test0046_no_reference_schema` | TEST0046: Wrap an op with no reference schema in ValidatingWrapper and confirm it succeeds | src/wrappers/validating.rs:446 |
 | test0047 | `test0047_batch_metadata_with_data_flow` | TEST0047: Build BatchMetadata from producer/consumer ops and verify only external inputs are required | src/batch_metadata.rs:246 |
 | test0048 | `test0048_reference_schema_merging` | TEST0048: Build BatchMetadata from two ops with different reference schemas and verify union of required refs | src/batch_metadata.rs:268 |
-| test0049 | `test0049_batch_op_success` | TEST0049: Run BatchOp with two succeeding ops and verify results contain both values in order | src/batch.rs:148 |
-| test0050 | `test0050_batch_op_failure` | TEST0050: Run BatchOp where the second op fails and verify the batch returns an error | src/batch.rs:164 |
-| test0051 | `test0051_batch_op_returns_all_results` | TEST0051: Run BatchOp with two ops and verify both result values are present in order | src/batch.rs:180 |
-| test0052 | `test0052_batch_metadata_data_flow` | TEST0052: Verify BatchOp metadata correctly identifies only the externally-required input fields | src/batch.rs:198 |
-| test0053 | `test0053_batch_reference_schema_merging` | TEST0053: Verify BatchOp merges reference schemas from all ops into a unified set of required refs | src/batch.rs:287 |
-| test0054 | `test0054_batch_rollback_on_failure` | TEST0054: Run BatchOp where the third op fails and verify rollback is called on the first two but not the third | src/batch.rs:360 |
-| test0055 | `test0055_batch_rollback_order` | TEST0055: Run BatchOp where the last op fails and verify rollback occurs in reverse (LIFO) order | src/batch.rs:441 |
-| test0056 | `test0056_batch_rollback_on_failure_partial` | TEST0056: Run BatchOp where one op fails and verify rollback is triggered for succeeded ops | src/batch.rs:511 |
+| test0049 | `test0049_batch_op_success` | TEST0049: Run BatchOp with two succeeding ops and verify results contain both values in order | src/batch.rs:158 |
+| test0050 | `test0050_batch_op_failure` | TEST0050: Run BatchOp where the second op fails and verify the batch returns an error | src/batch.rs:174 |
+| test0051 | `test0051_batch_op_returns_all_results` | TEST0051: Run BatchOp with two ops and verify both result values are present in order | src/batch.rs:190 |
+| test0052 | `test0052_batch_metadata_data_flow` | TEST0052: Verify BatchOp metadata correctly identifies only the externally-required input fields | src/batch.rs:208 |
+| test0053 | `test0053_batch_reference_schema_merging` | TEST0053: Verify BatchOp merges reference schemas from all ops into a unified set of required refs | src/batch.rs:297 |
+| test0054 | `test0054_batch_rollback_on_failure` | TEST0054: Run BatchOp where the third op fails and verify rollback is called on the first two but not the third | src/batch.rs:370 |
+| test0055 | `test0055_batch_rollback_order` | TEST0055: Run BatchOp where the last op fails and verify rollback occurs in reverse (LIFO) order | src/batch.rs:451 |
+| test0056 | `test0056_batch_rollback_on_failure_partial` | TEST0056: Run BatchOp where one op fails and verify rollback is triggered for succeeded ops | src/batch.rs:521 |
 | test0057 | `test0057_abort_macro_without_reason` | TEST0057: Invoke the abort macro without a reason and verify the context is aborted with no reason string | src/control_flow_tests.rs:86 |
 | test0058 | `test0058_abort_macro_with_reason` | TEST0058: Invoke the abort macro with a reason string and verify abort_reason matches | src/control_flow_tests.rs:106 |
 | test0059 | `test0059_continue_loop_macro` | TEST0059: Use the continue_loop macro inside an op and verify the scoped continue flag is set in context | src/control_flow_tests.rs:126 |
@@ -108,34 +108,39 @@ This catalog lists all tests in the Rust codebase.
 | test0090 | `test0090_perform_utility` | TEST0090: Use the perform() utility function directly and verify it returns the op result with auto-logging | tests/integration_tests.rs:259 |
 | test0091 | `test0091_generate_thumbnail_macro` | TEST0091: Use the op! macro to generate a thumbnail op and verify it processes the file and updates context | test_macro_fix.rs:65 |
 | test0092 | `test0092_process_file_macro` | TEST0092: Use the op! macro to generate a file processing op and verify context updates and result string | test_macro_fix.rs:85 |
-| test0093 | `test0093_batch_len_and_is_empty` | TEST0093: Call BatchOp::len and is_empty on empty and non-empty batches | src/batch.rs:582 |
-| test0094 | `test0094_batch_add_op` | TEST0094: Use add_op to dynamically add an op and verify it is executed | src/batch.rs:596 |
-| test0095 | `test0095_batch_continue_on_error` | TEST0095: Run BatchOp::with_continue_on_error and verify it collects results past failures | src/batch.rs:610 |
-| test0096 | `test0096_empty_batch_returns_empty` | TEST0096: Run an empty BatchOp and verify it returns an empty result vec | src/batch.rs:626 |
-| test0097 | `test0097_nested_batch_rollback` | TEST0097: Verify nested BatchOp rollback propagates correctly when outer batch fails | src/batch.rs:636 |
+| test0093 | `test0093_batch_len_and_is_empty` | TEST0093: Call BatchOp::len and is_empty on empty and non-empty batches | src/batch.rs:592 |
+| test0094 | `test0094_batch_add_op` | TEST0094: Use add_op to dynamically add an op and verify it is executed | src/batch.rs:606 |
+| test0095 | `test0095_batch_continue_on_error` | TEST0095: Run BatchOp::with_continue_on_error and verify it collects results past failures | src/batch.rs:620 |
+| test0096 | `test0096_empty_batch_returns_empty` | TEST0096: Run an empty BatchOp and verify it returns an empty result vec | src/batch.rs:636 |
+| test0097 | `test0097_nested_batch_rollback` | TEST0097: Verify nested BatchOp rollback propagates correctly when outer batch fails | src/batch.rs:646 |
 | test0098 | `test0098_dry_context_merge_overwrites_keys` | TEST0098: Merge two DryContexts where keys overlap and verify the merging context's values win | src/contexts.rs:488 |
 | test0099 | `test0099_wet_context_merge` | TEST0099: Merge two WetContexts and verify both sets of references are accessible in the target | src/contexts.rs:500 |
 | test0100 | `test0100_dry_context_serde_roundtrip` | TEST0100: Serialize and deserialize a DryContext and verify all values survive the round-trip | src/contexts.rs:517 |
 | test0101 | `test0101_dry_context_clone_is_independent` | TEST0101: Clone a DryContext and verify the clone is independent (mutations don't propagate) | src/contexts.rs:533 |
 | test0102 | `test0102_dry_context_keys` | TEST0102: Verify DryContext::keys() returns all inserted keys | src/contexts.rs:543 |
 | test0103 | `test0103_wet_context_keys` | TEST0103: Verify WetContext::keys() returns all inserted reference keys | src/contexts.rs:555 |
-| test0104 | `test0104_op_error_display_execution_failed` | TEST0104: Verify OpError::ExecutionFailed displays with the correct message format | src/error.rs:54 |
-| test0105 | `test0105_op_error_display_timeout` | TEST0105: Verify OpError::Timeout displays with the correct timeout_ms value | src/error.rs:61 |
-| test0106 | `test0106_op_error_display_context` | TEST0106: Verify OpError::Context displays with the correct message format | src/error.rs:68 |
-| test0107 | `test0107_op_error_display_aborted` | TEST0107: Verify OpError::Aborted displays with the correct message format | src/error.rs:75 |
-| test0108 | `test0108_op_error_clone_execution_failed` | TEST0108: Clone an OpError::ExecutionFailed and verify the clone is identical | src/error.rs:82 |
-| test0109 | `test0109_op_error_clone_timeout` | TEST0109: Clone OpError::Timeout and verify timeout_ms is preserved | src/error.rs:94 |
-| test0110 | `test0110_op_error_clone_other_converts_to_execution_failed` | TEST0110: Clone OpError::Other and verify it becomes ExecutionFailed with the error message preserved | src/error.rs:105 |
-| test0111 | `test0111_op_error_from_serde_json_error` | TEST0111: Convert a serde_json::Error into OpError via From impl | src/error.rs:119 |
+| test0104 | `test0104_op_error_display_execution_failed` | TEST0104: Verify OpError::ExecutionFailed displays with the correct message format | src/error.rs:126 |
+| test0105 | `test0105_op_error_display_timeout` | TEST0105: Verify OpError::Timeout displays with the correct timeout_ms value | src/error.rs:133 |
+| test0106 | `test0106_op_error_display_context` | TEST0106: Verify OpError::Context displays with the correct message format | src/error.rs:140 |
+| test0107 | `test0107_op_error_display_aborted` | TEST0107: Verify OpError::Aborted displays with the correct message format | src/error.rs:147 |
+| test0108 | `test0108_op_error_clone_execution_failed` | TEST0108: Clone an OpError::ExecutionFailed and verify the clone is identical | src/error.rs:154 |
+| test0109 | `test0109_op_error_clone_timeout` | TEST0109: Clone OpError::Timeout and verify timeout_ms is preserved | src/error.rs:166 |
+| test0110 | `test0110_op_error_clone_other_converts_to_execution_failed` | TEST0110: Clone OpError::Other and verify it becomes ExecutionFailed with the error message preserved | src/error.rs:177 |
+| test0111 | `test0111_op_error_from_serde_json_error` | TEST0111: Convert a serde_json::Error into OpError via From impl | src/error.rs:250 |
 | test0112 | `test0112_output_only_still_validates_references` | TEST0112: Verify ValidatingWrapper::output_only validates references even when input validation is disabled | src/wrappers/validating.rs:473 |
 | test0113 | `test0113_loop_op_break_terminates_loop` | TEST0113: Run a LoopOp where an op sets the break flag and verify the loop terminates early | src/loop_op.rs:610 |
 | test0114 | `test0114_loop_op_continue_on_error_skips_failed_iterations` | TEST0114: Run LoopOp::with_continue_on_error where an op fails and verify the loop continues | src/loop_op.rs:628 |
 | test0115 | `test0115_loop_op_with_no_ops_produces_no_results` | TEST0115: Run an empty LoopOp with a non-zero limit and verify it produces no results | src/loop_op.rs:671 |
+| test1730 | `test1730_wire_tokens_round_trip` | TEST1730: the wire vocabulary round-trips exactly and rejects unknowns. | src/failure.rs:87 |
+| test1731 | `test1731_only_input_is_permanent` | TEST1731: only Input is permanent — the retry machinery keys on this. | src/failure.rs:102 |
+| test1901 | `test1901_classified_accessors` | TEST1901: classified variants carry the emit source's identity through the accessors; unclassified variants are Internal with no code — the taxonomy's own rule (docs/failure-taxonomy.md). | src/error.rs:193 |
+| test1902 | `test1902_clone_preserves_classification` | TEST1902: cloning a classified error preserves its full identity — the run-record path clones the terminal error before persisting. | src/error.rs:233 |
+| test1903 | `test1903_wrap_preserves_classification` | TEST1903: wrapping preserves a classified failure's identity — the wrap enriches the human CHAIN only, never the class/code/reason (docs/failure-taxonomy.md). | src/ops.rs:153 |
 ---
 
 *Generated from Rust source tree*
-*Total tests: 115*
-*Total numbered tests: 115*
+*Total tests: 120*
+*Total numbered tests: 120*
 *Total unnumbered tests: 0*
 *Total numbered tests missing descriptions: 0*
 *Total numbering mismatches: 0*
