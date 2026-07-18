@@ -43,4 +43,4 @@ edition = "2021"
 keywords = ["ops", "async", "execution", "framework"]
 license = "MIT"
 name = "ops"
-version = "1.57.514"
+version = "1.58.517"

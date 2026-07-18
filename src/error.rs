@@ -26,6 +26,11 @@ pub enum OpError {
         code: String,
         class: crate::failure::FailureClass,
         reason: String,
+        /// Media URN of the ARGUMENT the origin attributed the failure to,
+        /// when — and only when — its emit source could name one (argument
+        /// binding/validation failures can; runtime ERR frames cannot).
+        /// Carried verbatim through wrapping, never invented downstream.
+        arg_urn: Option<String>,
     },
     
     #[error("Op aborted: {0}")]
@@ -45,6 +50,11 @@ pub enum OpError {
         code: String,
         class: crate::failure::FailureClass,
         message: String,
+        /// Media URN of the ARGUMENT the emit source attributed the failure
+        /// to, when it could name one. `None` means "no single argument is
+        /// attributable" and is never upgraded by wrapping layers
+        /// (docs/failure-taxonomy.md discipline).
+        arg_urn: Option<String>,
     },
     
     #[error(transparent)]
@@ -73,6 +83,18 @@ impl OpError {
         }
     }
 
+    /// Media URN of the argument the failure is attributed to, when the
+    /// emit source declared one. `None` for every unclassified variant and
+    /// for classified failures whose source could not name a single
+    /// offending argument — never guessed here.
+    pub fn failure_arg_urn(&self) -> Option<&str> {
+        match self {
+            Self::Classified { arg_urn, .. } => arg_urn.as_deref(),
+            Self::WrappedClassified { arg_urn, .. } => arg_urn.as_deref(),
+            _ => None,
+        }
+    }
+
     /// The LEAF human reason — the origin's own message for classified
     /// failures, the Display chain otherwise.
     pub fn failure_reason(&self) -> String {
@@ -91,20 +113,22 @@ impl Clone for OpError {
             Self::Timeout { timeout_ms } => Self::Timeout { timeout_ms: *timeout_ms },
             Self::Context(msg) => Self::Context(msg.clone()),
             Self::BatchFailed(msg) => Self::BatchFailed(msg.clone()),
-            Self::WrappedClassified { chain, code, class, reason } => {
+            Self::WrappedClassified { chain, code, class, reason, arg_urn } => {
                 Self::WrappedClassified {
                     chain: chain.clone(),
                     code: code.clone(),
                     class: *class,
                     reason: reason.clone(),
+                    arg_urn: arg_urn.clone(),
                 }
             }
             Self::Aborted(msg) => Self::Aborted(msg.clone()),
             Self::Trigger(msg) => Self::Trigger(msg.clone()),
-            Self::Classified { code, class, message } => Self::Classified {
+            Self::Classified { code, class, message, arg_urn } => Self::Classified {
                 code: code.clone(),
                 class: *class,
                 message: message.clone(),
+                arg_urn: arg_urn.clone(),
             },
             Self::Other(boxed_error) => Self::ExecutionFailed(format!("{}", boxed_error)),
         }
@@ -197,10 +221,16 @@ mod tests {
             code: "CONTEXT_OVERFLOW".to_string(),
             class: FailureClass::Input,
             message: "prompt too large".to_string(),
+            arg_urn: Some("media:prompt;textable".to_string()),
         };
         assert_eq!(classified.failure_class(), FailureClass::Input);
         assert_eq!(classified.failure_code(), Some("CONTEXT_OVERFLOW"));
         assert_eq!(classified.failure_reason(), "prompt too large");
+        assert_eq!(
+            classified.failure_arg_urn(),
+            Some("media:prompt;textable"),
+            "the emit source's argument attribution is served structurally"
+        );
         assert_eq!(classified.to_string(), "CONTEXT_OVERFLOW: prompt too large");
 
         let wrapped = OpError::WrappedClassified {
@@ -208,9 +238,15 @@ mod tests {
             code: "CONTEXT_OVERFLOW".to_string(),
             class: FailureClass::Input,
             reason: "prompt too large".to_string(),
+            arg_urn: None,
         };
         assert_eq!(wrapped.failure_class(), FailureClass::Input);
         assert_eq!(wrapped.failure_code(), Some("CONTEXT_OVERFLOW"));
+        assert_eq!(
+            wrapped.failure_arg_urn(),
+            None,
+            "no attribution declared means none served — never guessed"
+        );
         assert_eq!(
             wrapped.failure_reason(),
             "prompt too large",
@@ -238,11 +274,13 @@ mod tests {
             code: "GPU_OUT_OF_MEMORY".to_string(),
             class: FailureClass::Resource,
             reason: "no VRAM".to_string(),
+            arg_urn: Some("media:model-spec;textable".to_string()),
         };
         let cloned = original.clone();
         assert_eq!(cloned.failure_class(), FailureClass::Resource);
         assert_eq!(cloned.failure_code(), Some("GPU_OUT_OF_MEMORY"));
         assert_eq!(cloned.failure_reason(), "no VRAM");
+        assert_eq!(cloned.failure_arg_urn(), Some("media:model-spec;textable"));
     }
 
     // TEST0111: Convert a serde_json::Error into OpError via From impl

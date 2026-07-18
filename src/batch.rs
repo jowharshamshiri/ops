@@ -103,6 +103,7 @@ where
                                 code: code.to_string(),
                                 class: error.failure_class(),
                                 reason: error.failure_reason(),
+                                arg_urn: error.failure_arg_urn().map(str::to_string),
                             },
                             None => OpError::BatchFailed(chain),
                         });

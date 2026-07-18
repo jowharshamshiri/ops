@@ -52,20 +52,22 @@ pub fn wrap_nested_op_exception(trigger_name: &str, error: OpError) -> OpError {
         },
         // Classified failures keep their identity through wrapping — the
         // wrap adds human context to the CHAIN, never touches class/code.
-        OpError::WrappedClassified { chain, code, class, reason } => {
+        OpError::WrappedClassified { chain, code, class, reason, arg_urn } => {
             OpError::WrappedClassified {
                 chain: format!("Batch op '{}' failed: {}", trigger_name, chain),
                 code,
                 class,
                 reason,
+                arg_urn,
             }
         },
-        OpError::Classified { code, class, message } => {
+        OpError::Classified { code, class, message, arg_urn } => {
             OpError::WrappedClassified {
                 chain: format!("Op '{}' failed: {}: {}", trigger_name, code, message),
                 code,
                 class,
                 reason: message,
+                arg_urn,
             }
         },
         OpError::Aborted(reason) => {
@@ -157,15 +159,21 @@ mod tests {
             code: "CONTEXT_OVERFLOW".to_string(),
             class: FailureClass::Input,
             message: "prompt too large".to_string(),
+            arg_urn: Some("media:prompt;textable".to_string()),
         };
         let wrapped = wrap_nested_op_exception("GenerateOp", classified);
         match wrapped {
-            OpError::WrappedClassified { chain, code, class, reason } => {
+            OpError::WrappedClassified { chain, code, class, reason, arg_urn } => {
                 assert!(chain.contains("GenerateOp"), "the wrap names the op");
                 assert!(chain.contains("prompt too large"));
                 assert_eq!(code, "CONTEXT_OVERFLOW");
                 assert_eq!(class, FailureClass::Input);
                 assert_eq!(reason, "prompt too large");
+                assert_eq!(
+                    arg_urn.as_deref(),
+                    Some("media:prompt;textable"),
+                    "the origin's argument attribution survives wrapping verbatim"
+                );
             }
             other => panic!("expected WrappedClassified, got {:?}", other),
         }
@@ -179,15 +187,17 @@ mod tests {
                 code: "CONTEXT_OVERFLOW".to_string(),
                 class: FailureClass::Input,
                 reason: "prompt too large".to_string(),
+                arg_urn: Some("media:prompt;textable".to_string()),
             },
         );
         match rewrapped {
-            OpError::WrappedClassified { chain, code, class, reason } => {
+            OpError::WrappedClassified { chain, code, class, reason, arg_urn } => {
                 assert!(chain.contains("OuterBatch"));
                 assert!(chain.contains("GenerateOp"));
                 assert_eq!(code, "CONTEXT_OVERFLOW");
                 assert_eq!(class, FailureClass::Input);
                 assert_eq!(reason, "prompt too large");
+                assert_eq!(arg_urn.as_deref(), Some("media:prompt;textable"));
             }
             other => panic!("expected WrappedClassified, got {:?}", other),
         }
